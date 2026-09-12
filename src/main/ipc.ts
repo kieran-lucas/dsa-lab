@@ -9,7 +9,7 @@ import { detect } from './runner/toolchains'
 import { log } from './log'
 const id = z.string().uuid()
 const name = z.string().trim().min(1).max(80)
-const language = z.enum(['cpp', 'python'])
+const language = z.enum(['cpp', 'python', 'java'])
 const code = z.string().max(2 * 1024 * 1024)
 const command = z
   .object({
@@ -31,6 +31,7 @@ const settings = z
   .object({
     cpp: command.refine((c) => !!c.executable.trim(), 'C++ executable is required'),
     python: command,
+    java: command.refine((c) => !!c.executable.trim(), 'Java compiler executable is required'),
     problemId: id.nullable(),
     approachId: id.nullable(),
     language,

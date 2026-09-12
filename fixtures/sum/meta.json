@@ -1,6 +1,6 @@
 {
   "title": "Sum of Two Numbers",
   "topic": "Foundations",
-  "timeLimitMs": { "cpp": 2000, "python": 5000 },
+  "timeLimitMs": { "cpp": 2000, "python": 5000, "java": 3000 },
   "outputComparison": "tokens"
 }

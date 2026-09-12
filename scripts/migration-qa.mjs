@@ -66,6 +66,8 @@ try {
     )
     assert.equal(state.problem.approaches[0].cppCode, '// original C++')
     assert.equal(state.problem.approaches[0].pythonCode, 'print(5)')
+    assert.match(state.problem.approaches[0].javaCode, /public class Main/)
+    assert.equal(state.problem.javaTimeLimitMs, 3000)
     assert.equal(state.problem.testCount, 1)
     assert.equal(state.text.input, '2 3\n')
     assert.equal(state.text.expected, '5\n')
@@ -81,7 +83,7 @@ try {
     app = null
   }
   console.log(
-    `PASS: schema v1 migration preserves problems, both sources, tests, selection and folder moves after restart. ${directory}`
+    `PASS: schema v1 migration preserves problems, existing sources, tests, selection and folder moves, and adds Java defaults. ${directory}`
   )
 } finally {
   if (app) await app.close()

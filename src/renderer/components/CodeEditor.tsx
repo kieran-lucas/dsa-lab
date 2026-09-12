@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as monaco from 'monaco-editor/editor'
 import 'monaco-editor/languages/definitions/cpp/register'
 import 'monaco-editor/languages/definitions/python/register'
+import 'monaco-editor/languages/definitions/java/register'
 import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching'
 import 'monaco-editor/editor/contrib/clipboard/browser/clipboard'
 import 'monaco-editor/editor/contrib/comment/browser/comment'
@@ -67,9 +68,9 @@ export function CodeEditor({ value, language, modelId, onChange, diagnostics, ju
   useEffect(() => {
     const model = monaco.editor.createModel(
       initial.current,
-      language === 'cpp' ? 'cpp' : 'python',
+      language,
       monaco.Uri.parse(
-        `inmemory://dsa/${modelId}/${language === 'cpp' ? 'solution.cpp' : 'solution.py'}`
+        `inmemory://dsa/${modelId}/${language === 'cpp' ? 'solution.cpp' : language === 'python' ? 'solution.py' : 'Main.java'}`
       )
     )
     const instance = monaco.editor.create(host.current!, {
@@ -138,6 +139,16 @@ export function CodeEditor({ value, language, modelId, onChange, diagnostics, ju
         message: diagnostics,
         severity: monaco.MarkerSeverity.Error
       })
+    const java = /Main\.java:(\d+):\s*(error|warning):\s*([^\n]+)/.exec(diagnostics)
+    if (java)
+      markers.push({
+        startLineNumber: +java[1],
+        endLineNumber: +java[1],
+        startColumn: 1,
+        endColumn: 100,
+        message: java[3],
+        severity: java[2] === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning
+      })
     monaco.editor.setModelMarkers(model, 'dsa', markers)
   }, [diagnostics])
   useEffect(() => {
@@ -151,7 +162,7 @@ export function CodeEditor({ value, language, modelId, onChange, diagnostics, ju
     <div
       className="code-editor"
       ref={host}
-      aria-label={`${language === 'cpp' ? 'C++' : 'Python'} solution editor`}
+      aria-label={`${language === 'cpp' ? 'C++' : language === 'python' ? 'Python' : 'Java'} solution editor`}
     />
   )
 }

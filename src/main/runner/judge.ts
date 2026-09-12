@@ -7,7 +7,7 @@ import { Store } from '../db'
 import { log } from '../log'
 import { compareOutput, aggregate } from './comparator'
 import { execute } from './process'
-import { detect } from './toolchains'
+import { detect, javaRuntime } from './toolchains'
 export class Judge {
   active: { state: RunState; controller: AbortController; done?: Promise<void> } | null = null
   constructor(
@@ -28,7 +28,12 @@ export class Judge {
       language: request.language,
       phase: 'compiling',
       totalCount: problem.testCount,
-      timeLimitMs: request.language === 'cpp' ? problem.cppTimeLimitMs : problem.pythonTimeLimitMs,
+      timeLimitMs:
+        request.language === 'cpp'
+          ? problem.cppTimeLimitMs
+          : request.language === 'python'
+            ? problem.pythonTimeLimitMs
+            : problem.javaTimeLimitMs,
       results: [],
       diagnostics: '',
       compileTimeMs: 0
@@ -68,16 +73,29 @@ export class Judge {
       }
       if (!tool.available) {
         state.verdict = 'COMPILE_ERROR'
-        state.diagnostics = `${request.language === 'cpp' ? 'C++ compiler' : 'Python 3'} not found.\n\nOpen Environment to configure the executable and recheck.\n${tool.message}`
+        const toolName =
+          request.language === 'cpp'
+            ? 'C++ compiler'
+            : request.language === 'python'
+              ? 'Python 3'
+              : 'Java compiler/runtime'
+        state.diagnostics = `${toolName} not found.\n\nOpen Environment to configure the executable and recheck.\n${tool.message}`
         return
       }
       directory = await mkdtemp(join(tmpdir(), 'dsa-lab-run-'))
-      const file = request.language === 'cpp' ? 'solution.cpp' : 'solution.py'
+      const file =
+        request.language === 'cpp'
+          ? 'solution.cpp'
+          : request.language === 'python'
+            ? 'solution.py'
+            : 'Main.java'
       await writeFile(join(directory, file), request.sourceCode, 'utf8')
       const compileArgs =
         request.language === 'cpp'
           ? [file, '-std=c++20', '-O2', '-Wall', '-Wextra', '-o', 'program.exe']
-          : ['-m', 'py_compile', file]
+          : request.language === 'python'
+            ? ['-m', 'py_compile', file]
+            : ['-encoding', 'UTF-8', file]
       const compile = await execute(
         tool.command.executable,
         [...tool.command.argsPrefix, ...compileArgs],
@@ -112,11 +130,24 @@ export class Judge {
           try {
             const input = await readFile(this.store.path(stored.inputPath))
             const expected = await readFile(this.store.path(stored.outputPath), 'utf8')
-            const process = await execute(
-              request.language === 'cpp' ? join(directory, 'program.exe') : tool.command.executable,
-              request.language === 'cpp' ? [] : [...tool.command.argsPrefix, '-B', file],
-              { cwd: directory, timeout: state.timeLimitMs, input, signal: controller.signal }
-            )
+            const executable =
+              request.language === 'cpp'
+                ? join(directory, 'program.exe')
+                : request.language === 'python'
+                  ? tool.command.executable
+                  : javaRuntime(tool.command.executable)
+            const args =
+              request.language === 'cpp'
+                ? []
+                : request.language === 'python'
+                  ? [...tool.command.argsPrefix, '-B', file]
+                  : ['-Dfile.encoding=UTF-8', '-cp', directory, 'Main']
+            const process = await execute(executable, args, {
+              cwd: directory,
+              timeout: state.timeLimitMs,
+              input,
+              signal: controller.signal
+            })
             if (process.cancelled) {
               state.verdict = 'CANCELLED'
               return

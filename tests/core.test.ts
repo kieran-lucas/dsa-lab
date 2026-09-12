@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { compareOutput, aggregate } from '../src/main/runner/comparator'
 import { metadata, pairTests, validatePath } from '../src/main/import/validation'
+import { naturalCompare } from '../src/shared/types'
+import { javaRuntime } from '../src/main/runner/toolchains'
+describe('library ordering', () => {
+  it('sorts numeric names naturally, then alphabetically', () => {
+    expect(['Bài 10', 'Beta', 'Bài 2', 'Alpha', 'Bài 1'].sort(naturalCompare)).toEqual([
+      'Alpha',
+      'Bài 1',
+      'Bài 2',
+      'Bài 10',
+      'Beta'
+    ])
+  })
+  it('is stable regardless of last-opened timestamps', () => {
+    const problems = [
+      { title: 'Problem 10', lastOpenedAt: '2030-01-01' },
+      { title: 'Problem 2', lastOpenedAt: '2020-01-01' },
+      { title: 'Problem 1', lastOpenedAt: null }
+    ]
+    expect(problems.sort((a, b) => naturalCompare(a.title, b.title)).map((p) => p.title)).toEqual([
+      'Problem 1',
+      'Problem 2',
+      'Problem 10'
+    ])
+  })
+})
 describe('output comparison', () => {
   it.each([
     ['1 2', '1 2'],
@@ -70,12 +95,18 @@ describe('metadata', () => {
       topic: null,
       cppTimeLimitMs: 2000,
       pythonTimeLimitMs: 5000,
+      javaTimeLimitMs: 3000,
       outputComparison: 'tokens'
     }))
   it('rejects bad JSON and invalid limits', () => {
     expect(() => metadata('{', 'x', 'x.zip')).toThrow()
     expect(() => metadata('{"timeLimitMs":{"cpp":-1}}', 'x', 'x.zip')).toThrow()
   })
+})
+describe('Java toolchain', () => {
+  it('uses java on PATH for javac on PATH', () => expect(javaRuntime('javac')).toBe('java'))
+  it('uses the runtime beside an explicitly selected compiler', () =>
+    expect(javaRuntime('C:\\jdk\\bin\\javac.exe')).toBe('C:\\jdk\\bin\\java.exe'))
 })
 describe('verdict aggregation', () => {
   it('all AC passes', () => expect(aggregate(['AC', 'AC'])).toBe('PASSED'))

@@ -11,7 +11,7 @@ Verified on Windows 11 x64, Node 24.15.0, Electron 44.3.0, GCC 15.2.0 (MSYS2), a
 - NSIS x64 installer generation succeeds. The unpacked packaged executable loads its Electron-native SQLite binary and locally bundled Monaco workers/fonts, imports problems, and calls the system toolchains.
 - npm audit reports zero known vulnerabilities at verification time.
 
-The packaged journeys cover empty-state startup, renderer Node isolation, ZIP preview/commit, Markdown, GCC/Python detection, AC/WA/TLE/RE/OLE, compile and Python syntax errors, compiler line navigation, colored Monaco syntax and find, cancellation, double-run rejection, immutable run snapshots, autosave during execution, approach/language switching, rename, immediate-close persistence, malformed imports without partial library entries, missing tools, IPC input rejection, compact layout, and confirmed deletion.
+The packaged journeys cover empty-state startup, renderer Node isolation, ZIP preview/commit, Markdown, GCC/Python detection, AC/WA/TLE/RE/OLE, compile and Python syntax errors, compiler line navigation, colored Monaco syntax and find, cancellation, double-run rejection, immutable run snapshots, autosave during execution, approach/language switching, rename, immediate-close persistence, malformed imports without partial library entries, missing tools, IPC input rejection, compact layout, and confirmed deletion. Java support is covered by unit, type, build, and migration checks; a JDK is optional for the existing packaged journey.
 
 Reproduce:
 

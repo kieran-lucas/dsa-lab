@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, CircleAlert, FolderOpen, RefreshCw } from 'lucide-react'
-import type { Environment as EnvironmentInfo, Settings } from '../../shared/types'
+import type { Environment as EnvironmentInfo, Language, Settings } from '../../shared/types'
 import { Modal } from './Modal'
 export function Environment({
   settings,
@@ -13,6 +13,7 @@ export function Environment({
 }) {
   const [cpp, setCpp] = useState(settings.cpp.executable)
   const [python, setPython] = useState(settings.python.executable)
+  const [java, setJava] = useState(settings.java.executable)
   const [prefix, setPrefix] = useState(JSON.stringify(settings.python.argsPrefix))
   const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null)
   const [busy, setBusy] = useState(false)
@@ -34,7 +35,8 @@ export function Environment({
         throw new Error('Python prefix arguments must be a JSON array of strings, such as ["-3"].')
       const updated = await window.dsa.updateSettings({
         cpp: { executable: cpp.trim(), argsPrefix: [] },
-        python: { executable: python.trim(), argsPrefix: args }
+        python: { executable: python.trim(), argsPrefix: args },
+        java: { executable: java.trim(), argsPrefix: [] }
       })
       onUpdate(updated)
       setEnvironment(await window.dsa.detectToolchains())
@@ -44,15 +46,15 @@ export function Environment({
       setBusy(false)
     }
   }
-  const browse = async (language: 'cpp' | 'python') => {
+  const browse = async (language: Language) => {
     try {
       const file = await window.dsa.browseExecutable()
       if (file) {
         if (language === 'cpp') setCpp(file)
-        else {
+        else if (language === 'python') {
           setPython(file)
           setPrefix('[]')
-        }
+        } else setJava(file)
       }
     } catch (e) {
       setError(String(e))
@@ -63,23 +65,35 @@ export function Environment({
       <p className="modal-intro">
         Configure the local tools used to compile and run your solutions.
       </p>
-      {(['cpp', 'python'] as const).map((language) => (
+      {(['cpp', 'python', 'java'] as const).map((language) => (
         <section className="tool-section" key={language}>
           <div className="tool-heading">
-            <h3>{language === 'cpp' ? 'C++' : 'Python'}</h3>
-            <span className="subtle-tag">{language === 'cpp' ? 'GCC · C++20' : 'Python 3'}</span>
+            <h3>{language === 'cpp' ? 'C++' : language === 'python' ? 'Python' : 'Java'}</h3>
+            <span className="subtle-tag">
+              {language === 'cpp' ? 'GCC · C++20' : language === 'python' ? 'Python 3' : 'JDK'}
+            </span>
           </div>
           <label>
-            {language === 'cpp'
-              ? 'Compiler executable'
-              : 'Python executable · leave blank for automatic detection'}
+            {language === 'python'
+              ? 'Python executable · leave blank for automatic detection'
+              : 'Compiler executable'}
             <div className="input-with-button">
               <input
-                value={language === 'cpp' ? cpp : python}
+                value={language === 'cpp' ? cpp : language === 'python' ? python : java}
                 onChange={(e) =>
-                  language === 'cpp' ? setCpp(e.target.value) : setPython(e.target.value)
+                  language === 'cpp'
+                    ? setCpp(e.target.value)
+                    : language === 'python'
+                      ? setPython(e.target.value)
+                      : setJava(e.target.value)
                 }
-                placeholder={language === 'cpp' ? 'g++' : 'Automatic: py -3, then python'}
+                placeholder={
+                  language === 'cpp'
+                    ? 'g++'
+                    : language === 'python'
+                      ? 'Automatic: py -3, then python'
+                      : 'javac'
+                }
                 disabled={busy}
               />
               <button
@@ -115,7 +129,7 @@ export function Environment({
               <span>
                 {environment[language].available
                   ? environment[language].version
-                  : `${language === 'cpp' ? 'C++ compiler' : 'Python'} not found`}
+                  : `${language === 'cpp' ? 'C++ compiler' : language === 'python' ? 'Python' : 'Java JDK'} not found`}
               </span>
             </div>
           )}
@@ -123,7 +137,9 @@ export function Environment({
             <p className="field-help">
               {language === 'cpp'
                 ? 'DSA Lab looked for g++ on PATH, or your override. Install GCC / MinGW or choose its g++.exe above.'
-                : 'Install Python 3 with the Windows launcher, or choose python.exe above. For py.exe, use ["-3"] as prefix arguments.'}
+                : language === 'python'
+                  ? 'Install Python 3 with the Windows launcher, or choose python.exe above. For py.exe, use ["-3"] as prefix arguments.'
+                  : 'Install a JDK with javac and java on PATH, or choose javac.exe above. The matching java.exe is loaded from the same JDK.'}
             </p>
           )}
         </section>

@@ -1,7 +1,7 @@
 {
   "name": "dsa-lab",
   "version": "1.0.0",
-  "description": "A personal, offline Windows judge for C++ and Python",
+  "description": "A personal, offline Windows judge for C++, Python and Java",
   "author": "DSA Lab",
   "private": true,
   "main": "out/main/index.js",

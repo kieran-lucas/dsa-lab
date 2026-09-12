@@ -51,6 +51,23 @@ type Dialog =
   | 'move-problem'
   | null
 type Pending = { id: string; language: Language; code: string; revision: number }
+const languageName = (language: Language) =>
+  language === 'cpp' ? 'C++' : language === 'python' ? 'Python' : 'Java'
+const languageVersion = (language: Language) =>
+  language === 'cpp' ? 'C++20' : language === 'python' ? 'Python 3' : 'Java'
+const sourceFile = (language: Language) =>
+  language === 'cpp' ? 'solution.cpp' : language === 'python' ? 'solution.py' : 'Main.java'
+const approachSource = (
+  approach: NonNullable<Problem['approaches'][number]>,
+  language: Language
+) =>
+  language === 'cpp'
+    ? approach.cppCode
+    : language === 'python'
+      ? approach.pythonCode
+      : approach.javaCode
+const sourceField = (language: Language) =>
+  language === 'cpp' ? 'cppCode' : language === 'python' ? 'pythonCode' : 'javaCode'
 const Statement = memo(function Statement({ problem }: { problem: Problem }) {
   return (
     <article className="statement-body">
@@ -172,7 +189,7 @@ export function App() {
       const chosenLanguage = lang ?? language
       setProblem(item)
       setApproachId(next?.id ?? '')
-      setSource(next ? (chosenLanguage === 'cpp' ? next.cppCode : next.pythonCode) : '')
+      setSource(next ? approachSource(next, chosenLanguage) : '')
       setLanguage(chosenLanguage)
       setRun(null)
       currentRunId.current = null
@@ -243,9 +260,7 @@ export function App() {
         ? {
             ...previous,
             approaches: previous.approaches.map((a) =>
-              a.id === approachId
-                ? { ...a, [language === 'cpp' ? 'cppCode' : 'pythonCode']: source }
-                : a
+              a.id === approachId ? { ...a, [sourceField(language)]: source } : a
             )
           }
         : previous
@@ -271,7 +286,7 @@ export function App() {
       const next = problem.approaches.find((a) => a.id === id)
       if (!next) return
       setApproachId(id)
-      setSource(language === 'cpp' ? next.cppCode : next.pythonCode)
+      setSource(approachSource(next, language))
       setRun(null)
       setJump(null)
       await updateSettings({ approachId: id })
@@ -288,7 +303,7 @@ export function App() {
       await flush()
       rememberSource()
       setLanguage(next)
-      setSource(next === 'cpp' ? approach.cppCode : approach.pythonCode)
+      setSource(approachSource(approach, next))
       setRun(null)
       setJump(null)
       await updateSettings({ language: next })
@@ -626,7 +641,7 @@ export function App() {
               <ArrowUpRight size={12} />
             </button>
             <div className="welcome-footnote">
-              <span>C++20 & Python 3</span>
+              <span>C++20, Python 3 & Java</span>
               <i>·</i>
               <span>Fully offline</span>
               <i>·</i>
@@ -755,7 +770,7 @@ export function App() {
                 </div>
                 <div className="language-toolbar">
                   <div className="language-tabs" role="tablist" aria-label="Solution language">
-                    {(['cpp', 'python'] as const).map((lang) => (
+                    {(['cpp', 'python', 'java'] as const).map((lang) => (
                       <button
                         key={lang}
                         role="tab"
@@ -764,16 +779,12 @@ export function App() {
                         disabled={active || busy}
                         onClick={() => void switchLanguage(lang)}
                       >
-                        {lang === 'cpp' ? 'C++' : 'Python'}
+                        {languageName(lang)}
                       </button>
                     ))}
                   </div>
-                  <span className="file-label">
-                    {language === 'cpp' ? 'solution.cpp' : 'solution.py'}
-                  </span>
-                  <span className="language-version">
-                    {language === 'cpp' ? 'C++20' : 'Python 3'}
-                  </span>
+                  <span className="file-label">{sourceFile(language)}</span>
+                  <span className="language-version">{languageVersion(language)}</span>
                 </div>
                 {approach ? (
                   <CodeEditor
@@ -938,7 +949,8 @@ export function App() {
               </div>
               <p className="preview-limits">
                 C++ <span className="mono">{preview.cppTimeLimitMs} ms</span> · Python{' '}
-                <span className="mono">{preview.pythonTimeLimitMs} ms</span>
+                <span className="mono">{preview.pythonTimeLimitMs} ms</span> · Java{' '}
+                <span className="mono">{preview.javaTimeLimitMs} ms</span>
                 <br />
                 {preview.outputComparison === 'tokens'
                   ? 'Whitespace-insensitive token comparison'
@@ -1022,7 +1034,9 @@ export function App() {
                     disabled={busy}
                   />
                 </label>
-                <p className="field-help">Each approach keeps its own C++ and Python solution.</p>
+                <p className="field-help">
+                  Each approach keeps its own C++, Python and Java solution.
+                </p>
               </>
             ) : (
               <p className="confirm-copy">
@@ -1033,7 +1047,7 @@ export function App() {
                   </>
                 ) : (
                   <>
-                    Delete <strong>{approach?.name}</strong> and both saved language solutions?
+                    Delete <strong>{approach?.name}</strong> and all saved language solutions?
                   </>
                 )}
                 <br />

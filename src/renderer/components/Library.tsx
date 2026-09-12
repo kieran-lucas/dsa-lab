@@ -8,7 +8,12 @@ import {
   MoreHorizontal,
   Trash2
 } from 'lucide-react'
-import type { LibraryFolder, ProblemSummary, Settings } from '../../shared/types'
+import {
+  naturalCompare,
+  type LibraryFolder,
+  type ProblemSummary,
+  type Settings
+} from '../../shared/types'
 import { Modal } from './Modal'
 
 export function folderPath(folders: LibraryFolder[], id: string | null): string {
@@ -48,7 +53,7 @@ export function FolderSelect({
   const options = folders
     .filter((f) => !excluded.has(f.id))
     .map((f) => ({ id: f.id, path: folderPath(folders, f.id) }))
-    .sort((a, b) => a.path.localeCompare(b.path))
+    .sort((a, b) => naturalCompare(a.path, b.path))
   return (
     <label className="folder-select">
       {label}

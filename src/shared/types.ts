@@ -1,10 +1,14 @@
-export type Language = 'cpp' | 'python'
+export type Language = 'cpp' | 'python' | 'java'
+const naturalCollator = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' })
+export const naturalCompare = (a: string, b: string): number =>
+  naturalCollator.compare(a, b) || a.localeCompare(b, 'vi', { sensitivity: 'variant' })
 export type TestVerdict = 'AC' | 'WA' | 'TLE' | 'RE' | 'OLE'
 export type RunVerdict = 'PASSED' | 'FAILED' | 'COMPILE_ERROR' | 'CANCELLED'
 export type ToolCommand = { executable: string; argsPrefix: string[] }
 export type Settings = {
   cpp: ToolCommand
   python: ToolCommand
+  java: ToolCommand
   problemId: string | null
   approachId: string | null
   language: Language
@@ -30,6 +34,7 @@ export type Approach = {
   sortOrder: number
   cppCode: string
   pythonCode: string
+  javaCode: string
   createdAt: string
   updatedAt: string
 }
@@ -39,6 +44,7 @@ export type Problem = ProblemSummary & {
   statement: string
   cppTimeLimitMs: number
   pythonTimeLimitMs: number
+  javaTimeLimitMs: number
   outputComparison: 'tokens' | 'exact'
   groups: TestGroup[]
   approaches: Approach[]
@@ -51,6 +57,7 @@ export type ImportPreview = {
   testCount: number
   cppTimeLimitMs: number
   pythonTimeLimitMs: number
+  javaTimeLimitMs: number
   outputComparison: 'tokens' | 'exact'
   groups: { name: string; count: number }[]
 }
@@ -67,6 +74,7 @@ export type ToolStatus = {
 export type Environment = {
   cpp: ToolStatus
   python: ToolStatus
+  java: ToolStatus
   dataDirectory: string
   logsDirectory: string
 }
@@ -141,3 +149,5 @@ export const CPP_TEMPLATE =
   '#include <iostream>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n\n    // Write your solution here.\n\n    return 0;\n}\n'
 export const PYTHON_TEMPLATE =
   'import sys\n\n\ndef solve():\n    # Write your solution here.\n    pass\n\n\nif __name__ == "__main__":\n    solve()\n'
+export const JAVA_TEMPLATE =
+  'import java.io.*;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        // Write your solution here.\n    }\n}\n'

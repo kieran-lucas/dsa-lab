@@ -186,7 +186,9 @@ export class Importer {
         const now = new Date().toISOString()
         this.store.db
           .prepare(
-            'INSERT INTO problems (id,title,topic,statement_path,source_zip_name,cpp_time_limit_ms,python_time_limit_ms,output_comparison,created_at,updated_at,last_opened_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            `INSERT INTO problems
+              (id,title,topic,statement_path,source_zip_name,cpp_time_limit_ms,python_time_limit_ms,java_time_limit_ms,output_comparison,created_at,updated_at,last_opened_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             id,
@@ -196,6 +198,7 @@ export class Importer {
             item.source,
             p.cppTimeLimitMs,
             p.pythonTimeLimitMs,
+            p.javaTimeLimitMs,
             p.outputComparison,
             now,
             now,

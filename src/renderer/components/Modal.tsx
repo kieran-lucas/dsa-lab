@@ -57,13 +57,13 @@ export function ZipHelp() {
         <summary>Optional metadata & limits</summary>
         <pre>
           {
-            '{\n  "title": "Sum of Two Numbers",\n  "topic": "Foundations",\n  "timeLimitMs": { "cpp": 2000, "python": 5000 },\n  "outputComparison": "tokens"\n}'
+            '{\n  "title": "Sum of Two Numbers",\n  "topic": "Foundations",\n  "timeLimitMs": { "cpp": 2000, "python": 5000, "java": 3000 },\n  "outputComparison": "tokens"\n}'
           }
         </pre>
         <p>
-          Defaults: C++ 2,000 ms · Python 5,000 ms. Limits may range from 50 to 60,000 ms. Token
-          comparison ignores whitespace; <code>exact</code> only normalizes CRLF. ZIP ≤128 MB,
-          ≤5,000 entries, ≤512 MB expanded, each test file ≤16 MB, statement ≤4 MB.
+          Defaults: C++ 2,000 ms · Python 5,000 ms · Java 3,000 ms. Limits may range from 50 to
+          60,000 ms. Token comparison ignores whitespace; <code>exact</code> only normalizes CRLF.
+          ZIP ≤128 MB, ≤5,000 entries, ≤512 MB expanded, each test file ≤16 MB, statement ≤4 MB.
         </p>
       </details>
     </div>

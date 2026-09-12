@@ -25,6 +25,14 @@ const verdictLabel = {
   COMPILE_ERROR: 'Compile Error',
   CANCELLED: 'Cancelled'
 }
+const languageVersion = (language: Language) =>
+  language === 'cpp' ? 'C++20' : language === 'python' ? 'Python 3' : 'Java'
+const timeLimit = (problem: Problem, language: Language) =>
+  language === 'cpp'
+    ? problem.cppTimeLimitMs
+    : language === 'python'
+      ? problem.pythonTimeLimitMs
+      : problem.javaTimeLimitMs
 export const time = (ms: number) => (ms < 1000 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(0)} ms`)
 function Output({
   title,
@@ -162,7 +170,8 @@ export function Results({
   const active = run && run.phase !== 'complete'
   const line = run
     ? (/solution\.cpp:(\d+):/.exec(run.diagnostics)?.[1] ??
-      /solution\.py", line (\d+)/.exec(run.diagnostics)?.[1])
+      /solution\.py", line (\d+)/.exec(run.diagnostics)?.[1] ??
+      /Main\.java:(\d+):/.exec(run.diagnostics)?.[1])
     : null
   return (
     <section className="results-pane" aria-label="Test results">
@@ -170,15 +179,9 @@ export function Results({
         <div>
           <FlaskConical size={14} />
           <span>Test results</span>
-          {run && (
-            <span className="subtle-tag">{run.language === 'cpp' ? 'C++20' : 'Python 3'}</span>
-          )}
+          {run && <span className="subtle-tag">{languageVersion(run.language)}</span>}
         </div>
-        <span>
-          {run?.timeLimitMs ??
-            (language === 'cpp' ? problem.cppTimeLimitMs : problem.pythonTimeLimitMs)}{' '}
-          ms / test
-        </span>
+        <span>{run?.timeLimitMs ?? timeLimit(problem, language)} ms / test</span>
       </div>
       {!run ? (
         <div className="results-empty">

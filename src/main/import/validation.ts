@@ -84,7 +84,8 @@ const metadataSchema = z.object({
   timeLimitMs: z
     .object({
       cpp: z.number().int().min(50).max(60000).optional(),
-      python: z.number().int().min(50).max(60000).optional()
+      python: z.number().int().min(50).max(60000).optional(),
+      java: z.number().int().min(50).max(60000).optional()
     })
     .optional(),
   outputComparison: z.enum(['tokens', 'exact']).optional()
@@ -108,6 +109,7 @@ export function metadata(raw: string | undefined, statement: string, zipName: st
     topic: meta.topic || null,
     cppTimeLimitMs: meta.timeLimitMs?.cpp ?? 2000,
     pythonTimeLimitMs: meta.timeLimitMs?.python ?? 5000,
+    javaTimeLimitMs: meta.timeLimitMs?.java ?? 3000,
     outputComparison: meta.outputComparison ?? ('tokens' as const)
   }
 }
