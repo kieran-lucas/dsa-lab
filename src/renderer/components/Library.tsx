@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronRight,
   FileText,
@@ -107,8 +107,12 @@ export function Library({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const activeProblem = useRef<HTMLButtonElement>(null)
   const selected = settings?.selectedFolderId ?? null
   const expanded = settings?.expandedFolderIds ?? []
+  useEffect(() => {
+    activeProblem.current?.scrollIntoView({ block: 'nearest' })
+  }, [currentId, search, expanded])
   const select = (id: string | null) =>
     void onSettings({
       selectedFolderId: id,
@@ -172,6 +176,8 @@ export function Library({
       style={{ paddingLeft: 8 + Math.min(depth, 8) * 12 }}
       disabled={disabled}
       onClick={() => onOpen(item.id)}
+      ref={item.id === currentId ? activeProblem : undefined}
+      aria-current={item.id === currentId ? 'page' : undefined}
       title={`${folderPath(folders, item.folderId)} / ${item.title}\nLast opened: ${item.lastOpenedAt ? new Date(item.lastOpenedAt).toLocaleString() : 'Never'}`}
     >
       <FileText size={14} />
@@ -183,7 +189,6 @@ export function Library({
             : `${item.testCount} tests${item.topic ? ` · ${item.topic}` : ''}`}
         </small>
       </span>
-      {item.id === currentId && <span className="selected-dot" />}
     </button>
   )
   const branch = (parentId: string | null, depth: number): React.ReactNode => (

@@ -511,6 +511,7 @@ try {
     )
     await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
     await expect(page.locator('#library-panel')).toBeVisible()
+    await expect(page.locator('.problem-item[aria-current="page"]')).toBeVisible()
     await expect(page.getByLabel('Approach', { exact: true })).toContainText('Two Pointers')
     const data = await page.evaluate(async () => {
       const s = await window.dsa.getSettings()

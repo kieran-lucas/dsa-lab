@@ -23,6 +23,8 @@
   --surface: #ffffff;
   --surface-subtle: #f8f9fa;
   --surface-muted: #f1f3f5;
+  --surface-hover: #eef1f4;
+  --surface-active: #e7ebef;
   --border-strong: #d5d8dd;
   --focus: #49749f;
 }
@@ -313,9 +315,12 @@ details[open] > summary > svg:first-child {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #171717;
+  background: #20242a;
   color: #fff;
   border-radius: 7px;
+  box-shadow:
+    inset 0 0 0 1px #ffffff18,
+    0 1px 2px #1118271f;
 }
 .sidebar-toggle {
   margin-left: auto;
@@ -430,6 +435,9 @@ details[open] > summary > svg:first-child {
   flex: 1;
   overflow: hidden;
 }
+.breadcrumb > svg {
+  color: #a0a5ab;
+}
 .breadcrumb span:last-child {
   color: #30363d;
   overflow: hidden;
@@ -495,7 +503,7 @@ details[open] > summary > svg:first-child {
   overflow: hidden;
   border-right: 1px solid var(--border);
   background: var(--surface-subtle);
-  padding: 20px 12px 0;
+  padding: 18px 12px 0;
   opacity: 1;
   transform: translateX(0);
   visibility: visible;
@@ -522,13 +530,13 @@ details[open] > summary > svg:first-child {
   align-items: center;
   justify-content: space-between;
   padding: 0 7px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .library-tree-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 6px 8px;
+  padding: 18px 6px 8px;
 }
 .library-tree-heading .eyebrow {
   font-size: 9px;
@@ -539,13 +547,14 @@ details[open] > summary > svg:first-child {
   align-items: center;
   min-height: 32px;
   border-radius: 5px;
+  transition: background 120ms ease;
 }
 .folder-row.selected,
 .library-root.selected {
-  background: #e9edf0;
+  background: var(--surface-active);
 }
 .folder-row:hover {
-  background: #f0f0f0;
+  background: var(--surface-hover);
 }
 .folder-name {
   background: transparent;
@@ -596,6 +605,13 @@ details[open] > summary > svg:first-child {
   margin-bottom: 6px;
   padding: 6px 7px;
   min-height: 32px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.library-root:hover {
+  background: var(--surface-hover);
+  border-color: transparent;
 }
 .library-root .count {
   margin-left: auto;
@@ -649,6 +665,10 @@ details[open] > summary > svg:first-child {
   color: #767676;
   margin-bottom: 8px;
   border-color: var(--border);
+  box-shadow: 0 1px 2px #17233108;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 .search-box input {
   border: 0;
@@ -659,8 +679,8 @@ details[open] > summary > svg:first-child {
   min-width: 0;
 }
 .search-box:focus-within {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
+  border-color: #93adc7;
+  box-shadow: 0 0 0 2px #8bb0d329;
 }
 .search-box kbd {
   font-size: 9px;
@@ -673,6 +693,7 @@ details[open] > summary > svg:first-child {
   padding: 6px 9px;
   background: #fff;
   border-color: var(--border);
+  box-shadow: 0 1px 2px #17233108;
 }
 .import-button > span {
   margin-left: auto;
@@ -692,6 +713,7 @@ details[open] > summary > svg:first-child {
   overflow: auto;
   margin: 0 -4px;
   padding: 0 4px;
+  scrollbar-gutter: stable;
 }
 .problem-item {
   display: flex;
@@ -707,8 +729,12 @@ details[open] > summary > svg:first-child {
   color: #767676;
   position: relative;
   border-radius: 5px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
-.problem-item > span:not(.selected-dot) {
+.problem-item > span {
   flex: 1;
   min-width: 0;
 }
@@ -738,21 +764,23 @@ details[open] > summary > svg:first-child {
 }
 .problem-item.selected {
   background: #fff;
-  border-color: #dce0e5;
+  border-color: #d8dde3;
   color: #252525;
-  box-shadow: 0 1px 3px #17243506;
+  box-shadow:
+    inset 2px 0 #59636e,
+    0 1px 3px #1724350a;
+}
+.problem-item:hover {
+  border-color: transparent;
+  background: var(--surface-hover);
+}
+.problem-item.selected:hover {
+  border-color: #d8dde3;
+  background: #fff;
 }
 .problem-item.selected b {
   color: #171717;
   font-weight: var(--weight-control);
-}
-.selected-dot {
-  width: 3px;
-  height: 14px;
-  background: #343b44;
-  border-radius: 2px;
-  margin-left: 0;
-  flex-shrink: 0;
 }
 .library-message {
   font-size: 12px;
@@ -866,7 +894,7 @@ details[open] > summary > svg:first-child {
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: #404750;
-  background: #fff;
+  background: #fbfcfd;
 }
 .panel-label > div {
   display: flex;
@@ -901,7 +929,7 @@ details[open] > summary > svg:first-child {
 }
 .problem-facts {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 28px;
   padding-bottom: 22px;
@@ -914,7 +942,7 @@ details[open] > summary > svg:first-child {
   color: #767676;
   padding: 4px 7px;
   white-space: nowrap;
-  background: var(--surface-subtle);
+  background: #f3f5f7;
 }
 .markdown {
   font-size: 13px;
@@ -1045,6 +1073,7 @@ details[open] > summary > svg:first-child {
   border-bottom: 1px solid var(--border);
   height: 48px;
   flex-shrink: 0;
+  background: #fbfcfd;
 }
 .approach-choice {
   display: flex;
@@ -1090,7 +1119,7 @@ details[open] > summary > svg:first-child {
   display: flex;
   align-items: center;
   min-height: 38px;
-  background: #fff;
+  background: #fdfdfe;
   border-bottom: 1px solid #f0f0f0;
   padding: 0 16px;
   gap: 18px;
@@ -1140,7 +1169,7 @@ details[open] > summary > svg:first-child {
   padding: 0 16px;
   font-size: 9px;
   color: #737980;
-  background: #fdfdfd;
+  background: #fbfcfd;
 }
 .editor-status > span {
   display: flex;

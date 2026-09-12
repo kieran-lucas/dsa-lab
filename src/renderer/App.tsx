@@ -83,8 +83,12 @@ const Statement = memo(function Statement({ problem }: { problem: Problem }) {
       <div className="statement-eyebrow">{problem.topic || 'PROBLEM'}</div>
       <h1>{problem.title}</h1>
       <div className="problem-facts">
-        <span>{problem.testCount} test cases</span>
-        <span>{problem.groups.length} groups</span>
+        <span>
+          {problem.testCount} {problem.testCount === 1 ? 'test case' : 'test cases'}
+        </span>
+        <span>
+          {problem.groups.length} {problem.groups.length === 1 ? 'group' : 'groups'}
+        </span>
         <span>
           {problem.outputComparison === 'tokens' ? 'Token comparison' : 'Exact comparison'}
         </span>
