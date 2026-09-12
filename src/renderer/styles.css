@@ -766,9 +766,17 @@ details[open] > summary > svg:first-child {
   background: #fff;
   border-color: #d8dde3;
   color: #252525;
-  box-shadow:
-    inset 2px 0 #59636e,
-    0 1px 3px #1724350a;
+  box-shadow: 0 1px 3px #1724350a;
+}
+.problem-item.selected::before {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: -1px;
+  width: 2.5px;
+  border-radius: 0;
+  background: #59636e;
+  content: '';
 }
 .problem-item:hover {
   border-color: transparent;
