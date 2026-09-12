@@ -291,8 +291,10 @@ details[open] > summary > svg:first-child {
   display: flex;
   align-items: center;
   padding: 0 16px;
-  gap: 32px;
+  gap: 16px;
   background: var(--surface);
+  position: relative;
+  z-index: 10;
 }
 .brand {
   display: flex;
@@ -301,7 +303,8 @@ details[open] > summary > svg:first-child {
   font-size: 16px;
   font-weight: var(--weight-heading);
   letter-spacing: -0.6px;
-  width: 216px;
+  width: calc(var(--sidebar-width) - 16px);
+  padding-right: 8px;
   flex-shrink: 0;
 }
 .brand-mark {
@@ -320,7 +323,91 @@ details[open] > summary > svg:first-child {
   width: 34px;
   height: 34px;
   padding: 0;
-  color: #626a74;
+  border-radius: 7px;
+  background: #f5f6f7;
+  color: #4f5964;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.sidebar-toggle:hover {
+  background: #e9ecef;
+  color: #303841;
+}
+.sidebar-toggle:active:not(:disabled) {
+  background: #dfe3e7;
+}
+.sidebar-toggle > svg {
+  transition: transform 140ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar-toggle:not(.is-collapsed):hover > svg {
+  transform: translateX(-1px);
+}
+.sidebar-toggle.is-collapsed:hover > svg {
+  transform: translateX(1px);
+}
+.header-icon-button {
+  position: relative;
+}
+.header-icon-button:focus-visible {
+  outline-color: #7fa4c9;
+  outline-offset: 1px;
+}
+.button-tooltip {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 190px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: #25292e;
+  box-shadow: 0 4px 14px #17233124;
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  visibility: hidden;
+  transition:
+    opacity 120ms ease 300ms,
+    transform 120ms ease 300ms,
+    visibility 0s linear 420ms;
+}
+.button-tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  background: #25292e;
+  content: '';
+  transform: translate(-50%, 4px) rotate(45deg);
+}
+.button-tooltip kbd {
+  border-color: #535a62;
+  background: #343a40;
+  color: #d9dde1;
+  font-size: 8px;
+  line-height: 12px;
+  padding: 0 3px;
+}
+.header-icon-button:hover > .button-tooltip,
+.header-icon-button:focus-visible > .button-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+  transition-delay: 300ms, 300ms, 0s;
+}
+.header-icon-button:focus-visible > .button-tooltip {
+  transition-delay: 0s;
 }
 .local-label {
   font-size: 8px;
@@ -1867,11 +1954,8 @@ details[open] > summary > svg:first-child {
   .app-shell {
     --sidebar-width: 224px;
   }
-  .brand {
-    width: 192px;
-  }
   .app-header {
-    gap: 18px;
+    gap: 16px;
   }
   .statement-body {
     padding: 25px 23px;

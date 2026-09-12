@@ -543,7 +543,7 @@ export function App() {
           <span>DSA Lab</span>
           <span className="local-label">LOCAL</span>
           <button
-            className="icon-button sidebar-toggle"
+            className={`icon-button header-icon-button sidebar-toggle${sidebarCollapsed ? ' is-collapsed' : ''}`}
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-controls="library-panel"
@@ -552,7 +552,15 @@ export function App() {
             disabled={!settings}
             onClick={toggleSidebar}
           >
-            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={17} strokeWidth={1.8} />
+            ) : (
+              <PanelLeftClose size={17} strokeWidth={1.8} />
+            )}
+            <span className="button-tooltip" aria-hidden="true">
+              {sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              <kbd>Ctrl+B</kbd>
+            </span>
           </button>
         </div>
         <div className="breadcrumb">
@@ -576,12 +584,15 @@ export function App() {
             {saveStatus}
           </span>
           <button
-            className="icon-button header-settings-button"
+            className="icon-button header-icon-button header-settings-button"
             aria-label="Settings"
             title="Settings"
             onClick={() => openDialog('settings')}
           >
             <SettingsIcon size={17} />
+            <span className="button-tooltip" aria-hidden="true">
+              Settings
+            </span>
           </button>
           <button onClick={() => openDialog('environment')}>
             <Settings2 size={14} />
