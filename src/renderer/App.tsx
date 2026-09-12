@@ -545,7 +545,6 @@ export function App() {
           <button
             className={`icon-button header-icon-button sidebar-toggle${sidebarCollapsed ? ' is-collapsed' : ''}`}
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-controls="library-panel"
             aria-expanded={!sidebarCollapsed}
             aria-keyshortcuts="Control+B"
@@ -557,10 +556,6 @@ export function App() {
             ) : (
               <PanelLeftClose size={17} strokeWidth={1.8} />
             )}
-            <span className="button-tooltip" aria-hidden="true">
-              {sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              <kbd>Ctrl+B</kbd>
-            </span>
           </button>
         </div>
         <div className="breadcrumb">
