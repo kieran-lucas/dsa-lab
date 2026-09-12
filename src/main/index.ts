@@ -126,9 +126,16 @@ else {
         log('Renderer exited', details.reason)
       )
       const importer = new Importer(store)
-      const judge = new Judge(store, (event) => {
-        if (!mainWindow.isDestroyed()) mainWindow.webContents.send('dsa:run-progress', event)
-      })
+      const algs4JarPath = app.isPackaged
+        ? join(process.resourcesPath, 'vendor', 'algs4.jar')
+        : join(app.getAppPath(), 'vendor', 'algs4.jar')
+      const judge = new Judge(
+        store,
+        (event) => {
+          if (!mainWindow.isDestroyed()) mainWindow.webContents.send('dsa:run-progress', event)
+        },
+        algs4JarPath
+      )
       registerIpc(mainWindow, store, importer, judge, logsDirectory, allowedUrl)
       let closing = false
       let awaitingSave = false

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Store } from '../src/main/db'
 import { Judge } from '../src/main/runner/judge'
 import type { RunState } from '../src/shared/types'
@@ -12,15 +12,20 @@ const hasJdk =
   spawnSync('java', ['--version'], { windowsHide: true }).status === 0
 
 describe('Java runner', () => {
-  it.runIf(hasJdk)('compiles Main.java and judges its output', async () => {
+  async function runJava(
+    sourceCode: string,
+    algs4JarPath?: string,
+    input = '2 3\n',
+    expectedOutput = '5\n'
+  ): Promise<RunState | undefined> {
     const root = mkdtempSync(join(tmpdir(), 'dsa-lab-java-test-'))
     const store = new Store(root)
     try {
       const relative = 'problems/problem'
       mkdirSync(join(root, relative, 'tests'), { recursive: true })
       writeFileSync(join(root, relative, 'problem.md'), '# Sum')
-      writeFileSync(join(root, relative, 'tests/0.in'), '2 3\n')
-      writeFileSync(join(root, relative, 'tests/0.out'), '5\n')
+      writeFileSync(join(root, relative, 'tests/0.in'), input)
+      writeFileSync(join(root, relative, 'tests/0.out'), expectedOutput)
       store.db
         .prepare(
           `INSERT INTO problems
@@ -50,24 +55,86 @@ describe('Java runner', () => {
         .run('test', 'group', '001', `${relative}/tests/0.in`, `${relative}/tests/0.out`, 0)
       const approach = store.createApproach('problem', 'Main')
       let final: RunState | undefined
-      const judge = new Judge(store, (progress) => {
-        if (progress.state?.phase === 'complete') final = progress.state
-      })
+      const judge = new Judge(
+        store,
+        (progress) => {
+          if (progress.state?.phase === 'complete') final = progress.state
+        },
+        algs4JarPath
+      )
       judge.start({
         problemId: 'problem',
         approachId: approach.id,
         language: 'java',
-        sourceCode:
-          'import java.util.*; public class Main { public static void main(String[] a) { Scanner s = new Scanner(System.in); System.out.println(s.nextInt() + s.nextInt()); } }'
+        sourceCode
       })
       await judge.active?.done
-
-      expect(final?.verdict).toBe('PASSED')
-      expect(final?.results).toHaveLength(1)
-      expect(final?.results[0].verdict).toBe('AC')
+      return final
     } finally {
       store.db.close()
       rmSync(root, { recursive: true, force: true })
     }
+  }
+
+  it.runIf(hasJdk)('compiles Main.java and judges its output', async () => {
+    const final = await runJava(
+      'import java.util.*; public class Main { public static void main(String[] a) { Scanner s = new Scanner(System.in); System.out.println(s.nextInt() + s.nextInt()); } }'
+    )
+
+    expect(final?.verdict).toBe('PASSED')
+    expect(final?.results).toHaveLength(1)
+    expect(final?.results[0].verdict).toBe('AC')
+  })
+
+  it.runIf(hasJdk)('compiles and runs with algs4 StdIn and StdOut', async () => {
+    const final = await runJava(
+      `import edu.princeton.cs.algs4.StdIn;
+import edu.princeton.cs.algs4.StdOut;
+
+public class Main {
+    public static void main(String[] args) {
+        int a = StdIn.readInt();
+        int b = StdIn.readInt();
+        StdOut.println(a + b);
+    }
+}`,
+      resolve('vendor/algs4.jar')
+    )
+
+    expect(final?.verdict).toBe('PASSED')
+    expect(final?.results).toHaveLength(1)
+    expect(final?.results[0].verdict).toBe('AC')
+  })
+
+  it.runIf(hasJdk)('runs an ordinary Java program through Judge', async () => {
+    const final = await runJava(
+      `public class Main {
+    public static void main(String[] args) {
+        System.out.println("OK");
+    }
+}`,
+      undefined,
+      '',
+      'OK\n'
+    )
+
+    expect(final?.verdict).toBe('PASSED')
+  })
+
+  it.runIf(hasJdk)('runs an algs4 StdOut program through Judge', async () => {
+    const final = await runJava(
+      `import edu.princeton.cs.algs4.StdOut;
+
+public class Main {
+    public static void main(String[] args) {
+        StdOut.println("OK");
+    }
+}`,
+      resolve('vendor/algs4.jar'),
+      '',
+      'OK\n'
+    )
+
+    expect(final?.verdict).toBe('PASSED')
   })
 })

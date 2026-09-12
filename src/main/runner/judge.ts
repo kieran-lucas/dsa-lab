@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { delimiter, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { RunProgress, RunRequest, RunState, TestRunResult } from '../../shared/types'
 import { Store } from '../db'
@@ -12,7 +12,8 @@ export class Judge {
   active: { state: RunState; controller: AbortController; done?: Promise<void> } | null = null
   constructor(
     private store: Store,
-    private emit: (event: RunProgress) => void
+    private emit: (event: RunProgress) => void,
+    private algs4JarPath?: string
   ) {}
   start(request: RunRequest): RunState {
     if (this.active) throw new Error('A run is already active. Cancel it before starting another.')
@@ -82,6 +83,17 @@ export class Judge {
         state.diagnostics = `${toolName} not found.\n\nOpen Environment to configure the executable and recheck.\n${tool.message}`
         return
       }
+      if (request.language === 'java' && this.algs4JarPath) {
+        const algs4JarAvailable = await stat(this.algs4JarPath)
+          .then((entry) => entry.isFile())
+          .catch(() => false)
+        if (!algs4JarAvailable) {
+          state.verdict = 'COMPILE_ERROR'
+          state.diagnostics =
+            "DSA Lab's bundled algs4.jar could not be found. Reinstall the application or restore vendor/algs4.jar."
+          return
+        }
+      }
       directory = await mkdtemp(join(tmpdir(), 'dsa-lab-run-'))
       const file =
         request.language === 'cpp'
@@ -90,12 +102,16 @@ export class Judge {
             ? 'solution.py'
             : 'Main.java'
       await writeFile(join(directory, file), request.sourceCode, 'utf8')
+      const javaClasspath =
+        request.language === 'java'
+          ? [directory, ...(this.algs4JarPath ? [this.algs4JarPath] : [])].join(delimiter)
+          : undefined
       const compileArgs =
         request.language === 'cpp'
           ? [file, '-std=c++20', '-O2', '-Wall', '-Wextra', '-o', 'program.exe']
           : request.language === 'python'
             ? ['-m', 'py_compile', file]
-            : ['-encoding', 'UTF-8', file]
+            : ['-encoding', 'UTF-8', '-cp', javaClasspath!, file]
       const compile = await execute(
         tool.command.executable,
         [...tool.command.argsPrefix, ...compileArgs],
@@ -141,7 +157,7 @@ export class Judge {
                 ? []
                 : request.language === 'python'
                   ? [...tool.command.argsPrefix, '-B', file]
-                  : ['-Dfile.encoding=UTF-8', '-cp', directory, 'Main']
+                  : ['-Dfile.encoding=UTF-8', '-cp', javaClasspath!, 'Main']
             const process = await execute(executable, args, {
               cwd: directory,
               timeout: state.timeLimitMs,

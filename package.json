@@ -29,6 +29,12 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "vendor/algs4.jar",
+        "to": "vendor/algs4.jar"
+      }
+    ],
     "asarUnpack": [
       "**/*.node"
     ],
