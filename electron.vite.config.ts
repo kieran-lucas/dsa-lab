@@ -16,6 +16,7 @@ export default defineConfig({
           html.replace("script-src 'self'", `script-src 'self' 'nonce-${nonce}'`)
       }
     ],
-    build: { minify: 'esbuild', chunkSizeWarningLimit: 4000 }
+    // Keep even small font subsets as local files, compatible with font-src 'self'.
+    build: { minify: 'esbuild', chunkSizeWarningLimit: 4000, assetsInlineLimit: 0 }
   }
 })

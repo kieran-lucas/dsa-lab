@@ -10,9 +10,14 @@ export type Settings = {
   language: Language
   statementWidth: number
   editorHeight: number
+  sidebarCollapsed: boolean
+  selectedFolderId: string | null
+  expandedFolderIds: string[]
 }
+export type LibraryFolder = { id: string; parentId: string | null; name: string }
 export type ProblemSummary = {
   id: string
+  folderId: string | null
   title: string
   topic: string | null
   testCount: number
@@ -105,11 +110,16 @@ export type TestText = {
   expectedTruncated: boolean
 }
 export interface DsaApi {
+  listFolders(): Promise<LibraryFolder[]>
+  createFolder(name: string, parentId: string | null): Promise<LibraryFolder>
+  updateFolder(id: string, name: string, parentId: string | null): Promise<void>
+  deleteFolder(id: string): Promise<void>
+  moveProblem(id: string, folderId: string | null): Promise<void>
   listProblems(): Promise<ProblemSummary[]>
   getProblem(id: string): Promise<Problem>
   deleteProblem(id: string): Promise<void>
   importProblemZip(): Promise<ImportResult>
-  confirmImport(token: string): Promise<string>
+  confirmImport(token: string, folderId: string | null): Promise<string>
   discardImport(token: string): Promise<void>
   createApproach(problemId: string, name: string): Promise<Approach>
   renameApproach(id: string, name: string): Promise<void>

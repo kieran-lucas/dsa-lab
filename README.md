@@ -66,13 +66,22 @@ Remove-Item Env:DSA_QA_EXECUTABLE
 
 ## Use the workspace
 
-1. Click **Import problem**, choose a ZIP, review the preview, then click **Import**.
-2. Select an approach or use **+** to create one. Each approach has independent C++ and Python code.
-3. Write in Monaco. Code saves after 450 ms and is flushed before switching or closing normally.
-4. Press **Run All** or **Ctrl+Enter**. Compilation/preflight happens once; every test runs sequentially, including tests after WA, TLE, RE, or OLE. **Cancel Run** stops the active child and retains completed results.
-5. Expand a group, then a case to inspect input, expected output, actual output, and stderr. Diagnostic line links focus the editor.
+1. Select **Library** or a folder, then use **New folder** to organize courses and homework. For example: `DSA UET / Bài tập về nhà / Tuần 1`.
+2. Click **Import problem**, choose a ZIP, review the preview, choose **Import into**, then click **Import**. A destination is required; **Library (top level)** keeps a problem outside folders.
+3. Select an approach or use **+** to create one. Each approach has independent C++ and Python code.
+4. Write in Monaco. Code saves after 450 ms and is flushed before switching or closing normally.
+5. Press **Run All** or **Ctrl+Enter**. Compilation/preflight happens once; every test runs sequentially, including tests after WA, TLE, RE, or OLE. **Cancel Run** stops the active child and retains completed results.
+6. Expand a group, then a case to inspect input, expected output, actual output, and stderr. Diagnostic line links focus the editor.
 
-**Ctrl+K** focuses library search. **Ctrl+S** immediately saves. **Ctrl+F** opens Monaco find. Drag the dividers to resize panels; focused dividers also respond to arrow keys. The last problem, approach, language, and panel proportions are restored on restart.
+Use **Failures** in the results pane to show only failed cases and open their groups automatically. **All tests** restores the complete suite. Runtime diagnostics and expected/actual output appear before the input for quicker inspection; filtering never changes verdicts or stops test execution.
+
+Folder chevrons expand/collapse the tree; clicking a folder selects the parent for **New folder**. Use a folder's **…** button to rename it or change its parent. Only empty folders can be deleted, with confirmation. The **Move problem** button above the statement moves an existing problem with its saved approaches and tests. Search finds problems across all folders, including collapsed branches, and displays their paths. Folder names support Vietnamese; duplicate sibling names and moves into a folder's own descendants are rejected. Nesting is supported up to 32 levels.
+
+Existing libraries upgrade automatically: previous problems stay at the top level with their IDs, code and tests intact. Folders are logical organization in SQLite; the internally generated `problems/<uuid>` storage paths remain stable when you rename or move items. Expanded folders and the selected folder are restored on restart. Verify upgrades from the original schema with `npm run build` followed by `npm run test:migration`.
+
+The app opens maximized, keeping the native Windows title bar. Use the sidebar button beside the logo to hide or show the library and make more room for the statement and editor. Its state is remembered across restarts.
+
+**Ctrl+K** opens the library if hidden and focuses search. **Ctrl+S** immediately saves. **Ctrl+F** opens Monaco find. Drag the dividers to resize panels; focused dividers also respond to arrow keys. The last problem, approach, language, and panel proportions are restored on restart.
 
 Run All takes a source snapshot. Edits during execution are for the next run. Navigation is disabled during a run. Overall **Passed** requires all cases to be AC. **Compile Error** runs no tests. A cancelled suite is always **Cancelled**.
 

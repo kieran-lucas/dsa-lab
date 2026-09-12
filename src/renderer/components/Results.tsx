@@ -111,11 +111,13 @@ function TestRow({ result, name, limit }: { result: TestRunResult; name: string;
             Process terminated: stdout exceeded 4 MB or stderr exceeded 1 MB.
           </p>
         )}
+        {result.stderr && (
+          <Output title="Stderr" text={result.stderr} truncated={result.truncated} />
+        )}
         {error ? (
           <p className="danger-text">{error}</p>
         ) : text ? (
           <>
-            <Output title="Input" text={text.input} truncated={text.inputTruncated} />
             <div className="output-pair">
               <Output
                 title="Expected output"
@@ -132,12 +134,10 @@ function TestRow({ result, name, limit }: { result: TestRunResult; name: string;
                 truncated={result.truncated}
               />
             </div>
+            <Output title="Input" text={text.input} truncated={text.inputTruncated} />
           </>
         ) : (
           <p>Loading test…</p>
-        )}
-        {result.stderr && (
-          <Output title="Stderr" text={result.stderr} truncated={result.truncated} />
         )}
       </div>
     </details>
@@ -155,6 +155,8 @@ export function Results({
   onJump: (line: number) => void
 }) {
   const byId = useMemo(() => new Map(run?.results.map((r) => [r.testId, r]) ?? []), [run])
+  const [failuresOnly, setFailuresOnly] = useState(false)
+  const failureCount = run?.results.filter((r) => r.verdict !== 'AC').length ?? 0
   const passed = run?.results.filter((r) => r.verdict === 'AC').length ?? 0
   const totalTime = run?.results.reduce((n, r) => n + r.wallTimeMs, 0) ?? 0
   const active = run && run.phase !== 'complete'
@@ -183,13 +185,16 @@ export function Results({
           <div className="empty-small-icon">
             <Terminal size={20} />
           </div>
-          <p>Ready when you are.</p>
+          <p>Test your approach</p>
           <span>Run your solution to see test results.</span>
           <kbd>Ctrl + Enter</kbd>
         </div>
       ) : (
         <div className="results-scroll">
-          <div className="run-summary" aria-live="polite">
+          <div
+            className={`run-summary ${run.verdict === 'PASSED' ? 'summary-passed' : run.verdict === 'FAILED' ? 'summary-failed' : ''}`}
+            aria-live="polite"
+          >
             <div
               className={`run-status ${run.verdict === 'PASSED' ? 'success' : run.verdict === 'FAILED' || run.verdict === 'COMPILE_ERROR' ? 'danger' : ''}`}
             >
@@ -257,61 +262,83 @@ export function Results({
           {run.verdict === 'COMPILE_ERROR' ? (
             <p className="no-tests">No tests ran. Fix the diagnostics above, then run again.</p>
           ) : (
-            problem.groups.map((group) => {
-              const completed = group.tests
-                .map((t) => byId.get(t.id))
-                .filter((r): r is TestRunResult => !!r)
-              const accepted = completed.filter((t) => t.verdict === 'AC').length
-              const failed = completed.some((t) => t.verdict !== 'AC')
-              const done = completed.length === group.tests.length
-              return (
-                <details className="test-group" key={group.id}>
-                  <summary>
-                    <ChevronRight size={13} />
-                    <span className="group-name" title={group.name}>
-                      {group.name}
-                    </span>
-                    <span className="group-count">
-                      {accepted} / {group.tests.length}
-                    </span>
-                    <span
-                      className={`group-state ${failed ? 'danger' : done ? 'success' : 'muted'}`}
-                    >
-                      {failed ? (
-                        <CircleX size={12} />
-                      ) : done ? (
-                        <CheckCircle2 size={12} />
+            <>
+              <div className="results-filter" role="group" aria-label="Filter test results">
+                <button aria-pressed={!failuresOnly} onClick={() => setFailuresOnly(false)}>
+                  All tests <span>{run.totalCount}</span>
+                </button>
+                <button aria-pressed={failuresOnly} onClick={() => setFailuresOnly(true)}>
+                  Failures <span>{failureCount}</span>
+                </button>
+                <span className="filter-hint">{problem.groups.length} groups</span>
+              </div>
+              {failuresOnly && failureCount === 0 && (
+                <p className="filter-empty">
+                  {active ? 'No failures so far.' : 'No failed tests in this run.'}
+                </p>
+              )}
+              {problem.groups.map((group) => {
+                const completed = group.tests
+                  .map((t) => byId.get(t.id))
+                  .filter((r): r is TestRunResult => !!r)
+                const accepted = completed.filter((t) => t.verdict === 'AC').length
+                const failed = completed.some((t) => t.verdict !== 'AC')
+                const done = completed.length === group.tests.length
+                if (failuresOnly && !failed) return null
+                return (
+                  <details
+                    className="test-group"
+                    key={`${group.id}-${failuresOnly}`}
+                    open={failuresOnly || undefined}
+                  >
+                    <summary>
+                      <ChevronRight size={13} />
+                      <span className="group-name" title={group.name}>
+                        {group.name}
+                      </span>
+                      <span className="group-count">
+                        {accepted} / {group.tests.length}
+                      </span>
+                      <span
+                        className={`group-state ${failed ? 'danger' : done ? 'success' : 'muted'}`}
+                      >
+                        {failed ? (
+                          <CircleX size={12} />
+                        ) : done ? (
+                          <CheckCircle2 size={12} />
+                        ) : (
+                          <Clock3 size={12} />
+                        )}{' '}
+                        {failed
+                          ? 'Failed'
+                          : done
+                            ? 'Passed'
+                            : run.verdict === 'CANCELLED'
+                              ? 'Cancelled'
+                              : 'Pending'}
+                      </span>
+                    </summary>
+                    {group.tests.map((test) => {
+                      const result = byId.get(test.id)
+                      if (failuresOnly && (!result || result.verdict === 'AC')) return null
+                      return result ? (
+                        <TestRow
+                          key={test.id}
+                          result={result}
+                          name={test.name}
+                          limit={run.timeLimitMs}
+                        />
                       ) : (
-                        <Clock3 size={12} />
-                      )}{' '}
-                      {failed
-                        ? 'Failed'
-                        : done
-                          ? 'Passed'
-                          : run.verdict === 'CANCELLED'
-                            ? 'Cancelled'
-                            : 'Pending'}
-                    </span>
-                  </summary>
-                  {group.tests.map((test) => {
-                    const result = byId.get(test.id)
-                    return result ? (
-                      <TestRow
-                        key={test.id}
-                        result={result}
-                        name={test.name}
-                        limit={run.timeLimitMs}
-                      />
-                    ) : (
-                      <div className="pending-test" key={test.id}>
-                        <span>#{test.name}</span>
-                        <span>{active ? 'Waiting' : 'Not run'}</span>
-                      </div>
-                    )
-                  })}
-                </details>
-              )
-            })
+                        <div className="pending-test" key={test.id}>
+                          <span>#{test.name}</span>
+                          <span>{active ? 'Waiting' : 'Not run'}</span>
+                        </div>
+                      )
+                    })}
+                  </details>
+                )
+              })}
+            </>
           )}
           <div className="results-note">
             Sequential execution · wall-clock process time

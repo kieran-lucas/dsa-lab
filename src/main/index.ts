@@ -176,6 +176,7 @@ else {
         }, 8000)
       })
       await mainWindow.loadURL(allowedUrl)
+      mainWindow.maximize()
       mainWindow.show()
     })
     .catch((error) => {

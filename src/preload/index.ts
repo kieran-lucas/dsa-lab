@@ -1,11 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DsaApi, RunProgress } from '../shared/types'
 const api: DsaApi = {
+  listFolders: () => ipcRenderer.invoke('dsa:folders'),
+  createFolder: (name, parentId) => ipcRenderer.invoke('dsa:create-folder', name, parentId),
+  updateFolder: (id, name, parentId) => ipcRenderer.invoke('dsa:update-folder', id, name, parentId),
+  deleteFolder: (id) => ipcRenderer.invoke('dsa:delete-folder', id),
+  moveProblem: (id, folderId) => ipcRenderer.invoke('dsa:move-problem', id, folderId),
   listProblems: () => ipcRenderer.invoke('dsa:list'),
   getProblem: (id) => ipcRenderer.invoke('dsa:problem', id),
   deleteProblem: (id) => ipcRenderer.invoke('dsa:delete-problem', id),
   importProblemZip: () => ipcRenderer.invoke('dsa:import'),
-  confirmImport: (token) => ipcRenderer.invoke('dsa:confirm-import', token),
+  confirmImport: (token, folderId) => ipcRenderer.invoke('dsa:confirm-import', token, folderId),
   discardImport: (token) => ipcRenderer.invoke('dsa:discard-import', token),
   createApproach: (id, name) => ipcRenderer.invoke('dsa:create-approach', id, name),
   renameApproach: (id, name) => ipcRenderer.invoke('dsa:rename-approach', id, name),

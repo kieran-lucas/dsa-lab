@@ -28,6 +28,7 @@ const python = 'a, b = map(int, input().split())\nprint(a + b)\n'
 const executablePath = process.env.DSA_QA_EXECUTABLE
 const report = []
 let app, page
+let courseId, homeworkId, weekId
 const errors = []
 async function launch() {
   app = await electron.launch({
@@ -104,17 +105,141 @@ try {
     assert.equal(preferences.contextIsolation, true)
     assert.equal(preferences.nodeIntegration, false)
     assert.equal(preferences.sandbox, true)
+    assert.equal(
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()),
+      true
+    )
     await page.screenshot({ path: join(qaRoot, '01-empty.png') })
   })
-  await record('valid ZIP preview, atomic commit, library and statement', async () => {
-    await pick(fixture)
-    await page.getByRole('button', { name: 'Import ZIP', exact: true }).click()
-    await expect(page.locator('.preview-stats')).toContainText('3 test groups')
-    await expect(page.locator('.preview-stats')).toContainText('6 test cases')
-    await page.getByRole('button', { name: 'Import', exact: true }).click()
-    await expect(page.locator('.statement-body h1')).toHaveText('Sum of Two Numbers')
-    await expect(page.locator('.monaco-editor')).toBeVisible()
-    await expect(page.locator('.markdown h2').first()).toHaveText('Input')
+  await record('create nested course and homework folders', async () => {
+    for (const name of ['DSA UET', 'Bài tập về nhà', 'Tuần 1']) {
+      await page.getByRole('button', { name: 'New folder', exact: true }).click()
+      await page.getByLabel('Folder name', { exact: true }).fill(name)
+      await page.getByRole('button', { name: 'Create folder', exact: true }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(page.locator('.folder-name').filter({ hasText: name })).toBeVisible()
+    }
+    const folders = await page.evaluate(() => window.dsa.listFolders())
+    courseId = folders.find((f) => f.name === 'DSA UET').id
+    homeworkId = folders.find((f) => f.name === 'Bài tập về nhà').id
+    weekId = folders.find((f) => f.name === 'Tuần 1').id
+    assert.equal(folders.find((f) => f.id === homeworkId).parentId, courseId)
+    assert.equal(folders.find((f) => f.id === weekId).parentId, homeworkId)
+  })
+  await record(
+    'valid ZIP preview, required destination, atomic commit, library and statement',
+    async () => {
+      await pick(fixture)
+      await page.getByRole('button', { name: 'Import ZIP', exact: true }).click()
+      await expect(page.locator('.preview-stats')).toContainText('3 test groups')
+      await expect(page.locator('.preview-stats')).toContainText('6 test cases')
+      await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
+      await page.getByLabel('Import into', { exact: true }).selectOption(weekId)
+      await page.screenshot({ path: join(qaRoot, '08-import-preview.png') })
+      await page.getByRole('button', { name: 'Import', exact: true }).click()
+      await expect(page.locator('.statement-body h1')).toHaveText('Sum of Two Numbers')
+      await expect(page.locator('.monaco-editor')).toBeVisible()
+      await expect(page.locator('.markdown h2').first()).toHaveText('Input')
+      const alignment = await page.evaluate(() => ({
+        statement: document.querySelector('.statement-pane .panel-label').getBoundingClientRect()
+          .bottom,
+        editor: document.querySelector('.approach-toolbar').getBoundingClientRect().bottom,
+        search: document.querySelector('.search-box').getBoundingClientRect().height,
+        row: document.querySelector('.problem-item').getBoundingClientRect().height
+      }))
+      assert.ok(Math.abs(alignment.statement - alignment.editor) < 2, JSON.stringify(alignment))
+      assert.ok(alignment.search <= 36 && alignment.row <= 52, JSON.stringify(alignment))
+      assert.equal((await page.evaluate(() => window.dsa.listProblems()))[0].folderId, weekId)
+      await expect(page.locator('.breadcrumb')).toContainText('DSA UET / Bài tập về nhà / Tuần 1')
+      await page.screenshot({ path: join(qaRoot, '07-nested-library.png') })
+    }
+  )
+  await record('folder rename, moves, duplicate and cycle protection, safe deletion', async () => {
+    await setCode('// preserved during moves\nint main(){}')
+    for (const destination of ['root', homeworkId, weekId]) {
+      await page.getByRole('button', { name: 'Move problem', exact: true }).click()
+      await page.getByLabel('Destination folder').selectOption(destination)
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Move problem', exact: true })
+        .click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(page.locator('.view-lines')).toContainText('preserved during moves')
+      assert.equal(
+        (await page.evaluate(() => window.dsa.listProblems()))[0].folderId,
+        destination === 'root' ? null : destination
+      )
+    }
+    await page.getByRole('button', { name: 'Manage folder Tuần 1', exact: true }).click()
+    await page.getByLabel('Folder name', { exact: true }).fill('Tuần 01')
+    await page.getByLabel('Parent folder').selectOption(courseId)
+    await page.getByRole('button', { name: 'Save folder', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.locator('.breadcrumb')).toContainText('DSA UET / Tuần 01')
+    const rejected = await page.evaluate(
+      async ({ courseId, weekId }) => {
+        const errors = []
+        for (const call of [
+          () => window.dsa.updateFolder(courseId, 'DSA UET', weekId),
+          () => window.dsa.updateFolder(courseId, 'DSA UET', courseId),
+          () => window.dsa.createFolder(' dsa uet ', null),
+          () => window.dsa.updateFolder(weekId, 'Bài tập về nhà', courseId),
+          () => window.dsa.createFolder('Invalid', '00000000-0000-4000-8000-000000000000'),
+          () => window.dsa.deleteFolder(weekId),
+          () => window.dsa.deleteFolder(courseId),
+          () => window.dsa.createFolder('bad/name', null)
+        ]) {
+          try {
+            await call()
+            errors.push(false)
+          } catch {
+            errors.push(true)
+          }
+        }
+        return errors
+      },
+      { courseId, homeworkId, weekId }
+    )
+    assert.deepEqual(rejected, Array(8).fill(true))
+    await page.getByRole('button', { name: 'Manage folder Bài tập về nhà', exact: true }).click()
+    await page.getByRole('button', { name: 'Delete folder', exact: true }).click()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    assert.ok(
+      (await page.evaluate(() => window.dsa.listFolders())).some((f) => f.id === homeworkId)
+    )
+    await page.getByRole('button', { name: 'Manage folder Bài tập về nhà', exact: true }).click()
+    await page.getByRole('button', { name: 'Delete folder', exact: true }).click()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    assert.equal((await page.evaluate(() => window.dsa.listFolders())).length, 2)
+    await page.getByRole('button', { name: 'Collapse DSA UET', exact: true }).click()
+    await expect(page.locator('.problem-item')).toHaveCount(0)
+    await page.getByLabel('Search problems', { exact: true }).fill('Sum of Two')
+    await expect(page.locator('.problem-item')).toContainText('Library / DSA UET / Tuần 01')
+    await page.getByLabel('Search problems', { exact: true }).fill('')
+    await page.getByRole('button', { name: 'Expand DSA UET', exact: true }).click()
+  })
+  await record('collapsible library expands the editor and Ctrl+K restores search', async () => {
+    await setCode('// sidebar resize preserves unsaved code\nint main(){}')
+    const before = await page.locator('.monaco-editor').boundingBox()
+    await page.getByRole('button', { name: 'Hide library', exact: true }).click()
+    await expect(page.locator('#library-panel')).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Show library' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    await expect
+      .poll(async () => (await page.locator('.monaco-editor').boundingBox()).width)
+      .toBeGreaterThan(before.width + 80)
+    await expect(page.locator('.view-lines')).toContainText('sidebar resize preserves unsaved code')
+    await page.screenshot({ path: join(qaRoot, '06-collapsed-library.png') })
+    await page.keyboard.press('Control+k')
+    await expect(page.locator('#library-panel')).toBeVisible()
+    await expect(page.locator('#library-panel input')).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Hide library' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
   })
   await record('GCC and Python detection', async () => {
     const env = await page.evaluate(() => window.dsa.detectToolchains())
@@ -138,6 +263,26 @@ try {
     await page.keyboard.press('Control+f')
     await expect(page.locator('.find-widget')).toBeVisible()
     await page.keyboard.press('Escape')
+  })
+  await record('failure filter isolates failed cases without changing results', async () => {
+    await setCode(
+      '#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;if(a==2)std::cout<<"wrong";else std::cout<<a+b;}'
+    )
+    const state = await run('FAILED')
+    const failed = state.results.filter((r) => r.verdict !== 'AC').length
+    assert.ok(failed > 0 && failed < 6)
+    await page.getByRole('button', { name: /^Failures/ }).click()
+    await expect(page.locator('.test-row')).toHaveCount(failed)
+    await expect(page.locator('.test-row.failed').first()).toBeVisible()
+    await page.locator('.test-row>summary').first().click()
+    await expect(page.locator('.output-pair')).toContainText('wrong')
+    await expect(page.locator('.test-detail .output-label > span').first()).toHaveText(
+      'Expected output'
+    )
+    await page.screenshot({ path: join(qaRoot, '09-filtered-failure.png') })
+    await page.getByRole('button', { name: /^All tests/ }).click()
+    await expect(page.locator('.test-row')).toHaveCount(6)
+    await expect(page.locator('.run-status strong')).toHaveText('Failed')
   })
   await record('wrong answers continue through the entire suite', async () => {
     await setCode('#include <iostream>\nint main(){std::cout << "wrong";}')
@@ -180,7 +325,7 @@ try {
   })
   await record('cancellation retains completed tests; double run rejected', async () => {
     await setCode(
-      'import time\na,b=map(int,input().split())\nif a == -8: time.sleep(10)\nprint(a+b)'
+      'import time\na,b=map(int,input().split())\nif a != 2: time.sleep(10)\nprint(a+b)'
     )
     await page.evaluate(() => {
       window.__qaEvents = []
@@ -266,11 +411,26 @@ try {
     await expect(page.locator('.view-lines')).toContainText('brute force cpp')
     await page.getByRole('tab', { name: 'Python', exact: true }).click()
     await expect(page.locator('.view-lines')).toContainText('brute force python')
+    await page.getByRole('button', { name: 'Hide library', exact: true }).click()
+    await expect(page.locator('#library-panel')).toBeHidden()
     await setCode('# persisted on immediate close\nprint(456)')
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
     await new Promise((resolve) => app.process().once('exit', resolve))
     await launch()
     await expect(page.locator('.view-lines')).toContainText('persisted on immediate close')
+    assert.equal((await page.evaluate(() => window.dsa.listProblems()))[0].folderId, weekId)
+    assert.equal(
+      (await page.evaluate(() => window.dsa.listFolders())).find((f) => f.id === weekId).parentId,
+      courseId
+    )
+    assert.equal((await page.evaluate(() => window.dsa.getSettings())).sidebarCollapsed, true)
+    await expect(page.locator('#library-panel')).toBeHidden()
+    assert.equal(
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()),
+      true
+    )
+    await page.getByRole('button', { name: 'Show library', exact: true }).click()
+    await expect(page.locator('#library-panel')).toBeVisible()
     await expect(page.getByLabel('Approach', { exact: true })).toContainText('Two Pointers')
     const data = await page.evaluate(async () => {
       const s = await window.dsa.getSettings()
@@ -313,6 +473,23 @@ try {
     await pick(unsafe)
     assert.equal((await page.evaluate(() => window.dsa.importProblemZip())).ok, false)
     assert.equal((await page.evaluate(() => window.dsa.listProblems())).length, 1)
+    await pick(fixture)
+    const invalidDestination = await page.evaluate(async () => {
+      const preview = await window.dsa.importProblemZip()
+      if (!preview.ok) throw new Error('Expected valid preview')
+      let rejected = false
+      try {
+        await window.dsa.confirmImport(
+          preview.preview.token,
+          '00000000-0000-4000-8000-000000000000'
+        )
+      } catch {
+        rejected = true
+      }
+      await window.dsa.discardImport(preview.preview.token)
+      return { rejected, count: (await window.dsa.listProblems()).length }
+    })
+    assert.deepEqual(invalidDestination, { rejected: true, count: 1 })
   })
   await record('missing compiler setup and strict IPC validation', async () => {
     const result = await page.evaluate(async () => {
@@ -334,9 +511,18 @@ try {
     assert.equal(rejected, true)
   })
   await record('environment dialog, compact layout, no renderer errors', async () => {
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1366, 768))
+    await app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      window.unmaximize()
+      window.setSize(1366, 768)
+    })
     await page.getByRole('button', { name: 'Environment', exact: true }).click()
     await expect(page.locator('.tool-status').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open data folder', exact: true })).toBeVisible()
+    assert.equal(
+      await page.locator('.data-actions').evaluate((el) => getComputedStyle(el).opacity),
+      '1'
+    )
     await page.screenshot({ path: join(qaRoot, '04-environment.png') })
     await page.getByRole('button', { name: 'Close dialog' }).click()
     const layout = await page.evaluate(() => ({

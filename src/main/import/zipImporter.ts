@@ -169,7 +169,8 @@ export class Importer {
       throw error
     }
   }
-  async commit(token: string): Promise<string> {
+  async commit(token: string, folderId: string | null): Promise<string> {
+    this.store.requireFolder(folderId)
     const item = this.pending
     if (!item || item.preview.token !== token)
       throw new Error('Import preview expired. Please choose the ZIP again.')
@@ -221,6 +222,7 @@ export class Importer {
             )
         )
         this.store.createApproach(id, 'Main')
+        this.store.moveProblem(id, folderId)
       })()
       log(`Imported problem ${id}: ${item.pairs.length} tests`)
       return id

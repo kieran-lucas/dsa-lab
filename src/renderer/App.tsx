@@ -11,10 +11,11 @@ import {
   CircleHelp,
   Code2,
   FileArchive,
-  FileText,
-  FolderClosed,
+  FolderInput,
   HardDrive,
   LoaderCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Play,
   Plus,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import type {
   ImportPreview,
+  LibraryFolder,
   Language,
   Problem,
   ProblemSummary,
@@ -36,6 +38,7 @@ import { CodeEditor } from './components/CodeEditor'
 import { Modal, ZipHelp } from './components/Modal'
 import { Environment } from './components/Environment'
 import { Results } from './components/Results'
+import { Library, FolderSelect, folderPath } from './components/Library'
 
 type Dialog =
   | 'import'
@@ -45,6 +48,7 @@ type Dialog =
   | 'rename'
   | 'delete-approach'
   | 'delete-problem'
+  | 'move-problem'
   | null
 type Pending = { id: string; language: Language; code: string; revision: number }
 const Statement = memo(function Statement({ problem }: { problem: Problem }) {
@@ -78,6 +82,8 @@ const Statement = memo(function Statement({ problem }: { problem: Problem }) {
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [problems, setProblems] = useState<ProblemSummary[]>([])
+  const [folders, setFolders] = useState<LibraryFolder[]>([])
+  const [destination, setDestination] = useState('')
   const [problem, setProblem] = useState<Problem | null>(null)
   const [approachId, setApproachId] = useState('')
   const [language, setLanguage] = useState<Language>('cpp')
@@ -101,10 +107,18 @@ export function App() {
   const saveChain = useRef<Promise<void>>(Promise.resolve())
   const currentRunId = useRef<string | null>(null)
   const searchInput = useRef<HTMLInputElement>(null)
+  const searchRequested = useRef(false)
   const workspace = useRef<HTMLDivElement>(null)
   const coding = useRef<HTMLDivElement>(null)
   const active = !!run && run.phase !== 'complete'
   const approach = problem?.approaches.find((a) => a.id === approachId)
+  const sidebarCollapsed = settings?.sidebarCollapsed ?? false
+  useEffect(() => {
+    if (!sidebarCollapsed && searchRequested.current) {
+      searchRequested.current = false
+      searchInput.current?.focus()
+    }
+  }, [sidebarCollapsed])
   const report = (e: unknown) =>
     setError(
       e instanceof Error
@@ -140,6 +154,17 @@ export function App() {
     setSettings(next)
     return next
   }, [])
+  const focusSearch = () => {
+    if (!sidebarCollapsed) {
+      searchInput.current?.focus()
+      return
+    }
+    searchRequested.current = true
+    void updateSettings({ sidebarCollapsed: false }).catch((error) => {
+      searchRequested.current = false
+      report(error)
+    })
+  }
   const loadProblem = useCallback(
     async (id: string, preferred?: string, lang?: Language) => {
       const item = await window.dsa.getProblem(id)
@@ -164,10 +189,15 @@ export function App() {
   useEffect(() => {
     let mounted = true
     void (async () => {
-      const [state, list] = await Promise.all([window.dsa.getSettings(), window.dsa.listProblems()])
+      const [state, list, folderList] = await Promise.all([
+        window.dsa.getSettings(),
+        window.dsa.listProblems(),
+        window.dsa.listFolders()
+      ])
       if (!mounted) return
       setSettings(state)
       setProblems(list)
+      setFolders(folderList)
       setLanguage(state.language)
       const initial = list.find((p) => p.id === state.problemId) ?? list[0]
       if (initial) await loadProblem(initial.id, state.approachId ?? undefined, state.language)
@@ -289,8 +319,8 @@ export function App() {
       setBusy(false)
     }
   }
-  const keyboard = useRef({ runAll, flush })
-  keyboard.current = { runAll, flush }
+  const keyboard = useRef({ runAll, flush, focusSearch })
+  keyboard.current = { runAll, flush, focusSearch }
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (!event.ctrlKey) return
@@ -302,7 +332,7 @@ export function App() {
         void keyboard.current.flush().catch(() => {})
       } else if (event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        searchInput.current?.focus()
+        keyboard.current.focusSearch()
       }
     }
     window.addEventListener('keydown', listener, true)
@@ -312,8 +342,10 @@ export function App() {
     setModalError('')
     setName(next === 'rename' ? (approach?.name ?? '') : '')
     setDialog(next)
+    if (next === 'move-problem') setDestination(problem?.folderId ?? 'root')
   }
   const chooseZip = async () => {
+    if (dialog !== 'import') setDestination('')
     setDialog('import')
     setImportBusy(true)
     setImportIssues([])
@@ -340,7 +372,10 @@ export function App() {
     setImportBusy(true)
     try {
       await flush()
-      const id = await window.dsa.confirmImport(preview.token)
+      if (!destination) throw new Error('Choose an import destination.')
+      const folderId = destination === 'root' ? null : destination
+      const id = await window.dsa.confirmImport(preview.token, folderId)
+      await revealFolder(folderId)
       await loadProblem(id)
       setPreview(null)
       setDialog(null)
@@ -420,9 +455,46 @@ export function App() {
     element.addEventListener('pointerup', end)
     element.addEventListener('pointercancel', end)
   }
-  const visibleProblems = problems.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase())
-  )
+  const refreshLibrary = async () => {
+    const [list, folderList, state] = await Promise.all([
+      window.dsa.listProblems(),
+      window.dsa.listFolders(),
+      window.dsa.getSettings()
+    ])
+    setProblems(list)
+    setFolders(folderList)
+    setSettings(state)
+  }
+  const revealFolder = async (folderId: string | null) => {
+    const ancestors: string[] = []
+    let next = folderId
+    while (next) {
+      ancestors.push(next)
+      next = folders.find((f) => f.id === next)?.parentId ?? null
+    }
+    await updateSettings({
+      selectedFolderId: folderId,
+      expandedFolderIds: [...new Set([...(settings?.expandedFolderIds ?? []), ...ancestors])]
+    })
+  }
+  const moveProblem = async () => {
+    if (!problem || !destination) return
+    setBusy(true)
+    setModalError('')
+    try {
+      await flush()
+      const folderId = destination === 'root' ? null : destination
+      await window.dsa.moveProblem(problem.id, folderId)
+      setProblem((previous) => (previous ? { ...previous, folderId } : previous))
+      await revealFolder(folderId)
+      await refreshLibrary()
+      setDialog(null)
+    } catch (e) {
+      setModalError(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -432,9 +504,24 @@ export function App() {
           </span>
           <span>DSA Lab</span>
           <span className="local-label">LOCAL</span>
+          <button
+            className="icon-button sidebar-toggle"
+            aria-label={sidebarCollapsed ? 'Show library' : 'Hide library'}
+            title={sidebarCollapsed ? 'Show library' : 'Hide library'}
+            aria-controls="library-panel"
+            aria-expanded={!sidebarCollapsed}
+            disabled={!settings}
+            onClick={() =>
+              void updateSettings({ sidebarCollapsed: !sidebarCollapsed }).catch(report)
+            }
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
         </div>
         <div className="breadcrumb">
-          <span>Workspace</span>
+          <span title={folderPath(folders, problem?.folderId ?? null)}>
+            {folderPath(folders, problem?.folderId ?? null)}
+          </span>
           {problem && (
             <>
               <ChevronRight size={12} />
@@ -469,7 +556,7 @@ export function App() {
         </div>
       )}
       <div className="app-body">
-        <aside className="library">
+        <aside id="library-panel" className="library" hidden={sidebarCollapsed}>
           <div className="library-top">
             <span className="eyebrow">LIBRARY</span>
             <span className="count">{problems.length}</span>
@@ -493,42 +580,18 @@ export function App() {
             <Plus size={15} />
             Import problem<span>ZIP</span>
           </button>
-          <div className="library-section-label">YOUR PROBLEMS</div>
-          <nav className="problem-list" aria-label="Problem library">
-            {visibleProblems.map((item) => (
-              <button
-                key={item.id}
-                className={`problem-item ${item.id === problem?.id ? 'selected' : ''}`}
-                disabled={active || busy}
-                onClick={() => void switchProblem(item.id)}
-                title={`${item.title}\nLast opened: ${item.lastOpenedAt ? new Date(item.lastOpenedAt).toLocaleString() : 'Never'}`}
-              >
-                <FileText size={16} />
-                <span>
-                  <b>{item.title}</b>
-                  <small>
-                    {item.topic && (
-                      <>
-                        {item.topic}
-                        <i>·</i>
-                      </>
-                    )}
-                    {item.testCount} tests
-                  </small>
-                </span>
-                {item.id === problem?.id && <span className="selected-dot" />}
-              </button>
-            ))}
-            {search && !visibleProblems.length && (
-              <p className="library-message">No matching problems.</p>
-            )}
-            {!problems.length && (
-              <div className="library-empty">
-                <FolderClosed size={18} />
-                <span>Your practice starts here.</span>
-              </div>
-            )}
-          </nav>
+          <Library
+            folders={folders}
+            problems={problems}
+            currentId={problem?.id}
+            settings={settings}
+            search={search}
+            disabled={active || busy}
+            onOpen={(id) => void switchProblem(id)}
+            onSettings={updateSettings}
+            onRefresh={refreshLibrary}
+            onError={report}
+          />
           <div className="library-footer">
             <button className="text-button" onClick={() => openDialog('help')}>
               <CircleHelp size={14} />
@@ -582,14 +645,25 @@ export function App() {
                   <BookOpen size={14} />
                   <span>Problem</span>
                 </div>
-                <button
-                  className="icon-button"
-                  aria-label="Delete problem"
-                  disabled={active || busy}
-                  onClick={() => openDialog('delete-problem')}
-                >
-                  <Trash2 size={13} />
-                </button>
+                <div>
+                  <button
+                    className="icon-button"
+                    aria-label="Move problem"
+                    title="Move problem to folder"
+                    disabled={active || busy}
+                    onClick={() => openDialog('move-problem')}
+                  >
+                    <FolderInput size={14} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label="Delete problem"
+                    disabled={active || busy}
+                    onClick={() => openDialog('delete-problem')}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
               <Statement problem={problem} />
             </section>
@@ -779,6 +853,47 @@ export function App() {
       {dialog === 'environment' && settings && (
         <Environment settings={settings} onUpdate={setSettings} onClose={() => setDialog(null)} />
       )}
+      {dialog === 'move-problem' && (
+        <Modal
+          title="Move problem"
+          onClose={() => {
+            if (!busy) setDialog(null)
+          }}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              void moveProblem()
+            }}
+          >
+            <p className="modal-intro">
+              Choose a location for <strong>{problem?.title}</strong>. Saved code and tests move
+              with it.
+            </p>
+            <FolderSelect
+              folders={folders}
+              value={destination}
+              onChange={setDestination}
+              label="Destination folder"
+              required
+              disabled={busy}
+            />
+            {modalError && (
+              <p className="error-banner" role="alert">
+                {modalError}
+              </p>
+            )}
+            <div className="modal-footer">
+              <button type="button" disabled={busy} onClick={() => setDialog(null)}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy || !destination}>
+                Move problem
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {dialog === 'import' && (
         <Modal title="Import problem" onClose={closeImport}>
           {importBusy ? (
@@ -789,12 +904,15 @@ export function App() {
             </div>
           ) : preview ? (
             <div className="import-preview">
-              <div className="preview-icon">
-                <FileArchive size={22} />
+              <div className="import-identity">
+                <div className="preview-icon">
+                  <FileArchive size={22} />
+                </div>
+                <div>
+                  <h3>{preview.title}</h3>
+                  {preview.topic && <span className="subtle-tag">{preview.topic}</span>}
+                </div>
               </div>
-              <span className="eyebrow">READY TO IMPORT</span>
-              <h3>{preview.title}</h3>
-              {preview.topic && <span className="subtle-tag">{preview.topic}</span>}
               <div className="preview-stats">
                 <span>
                   <b>{preview.groupCount}</b> test groups
@@ -803,6 +921,13 @@ export function App() {
                   <b>{preview.testCount}</b> test cases
                 </span>
               </div>
+              <FolderSelect
+                folders={folders}
+                value={destination}
+                onChange={setDestination}
+                label="Import into"
+                required
+              />
               <div className="preview-groups">
                 {preview.groups.map((g) => (
                   <div key={g.name}>
@@ -847,7 +972,7 @@ export function App() {
               <button
                 className="primary"
                 onClick={() => void confirmImport()}
-                disabled={importBusy}
+                disabled={importBusy || !destination}
               >
                 <Plus size={14} />
                 Import

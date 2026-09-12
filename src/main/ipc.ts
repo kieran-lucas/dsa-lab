@@ -35,7 +35,10 @@ const settings = z
     approachId: id.nullable(),
     language,
     statementWidth: z.number().min(24).max(55),
-    editorHeight: z.number().min(30).max(75)
+    editorHeight: z.number().min(30).max(75),
+    sidebarCollapsed: z.boolean(),
+    selectedFolderId: id.nullable(),
+    expandedFolderIds: z.array(id).max(5000)
   })
   .partial()
   .strict()
@@ -76,6 +79,27 @@ export function registerIpc(
     if (judge.active) throw new Error('Wait for the active run to finish, or cancel it first.')
   }
   handle('list', z.tuple([]), () => store.list())
+  handle('folders', z.tuple([]), () => store.folders())
+  const folderName = z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .refine(
+      (s) => ![...s].some((c) => c.charCodeAt(0) < 32 || c === '/' || c === '\\'),
+      'Use a folder name without slashes or control characters'
+    )
+  handle('create-folder', z.tuple([folderName, id.nullable()]), ([name, parentId]) =>
+    store.createFolder(name, parentId)
+  )
+  handle('update-folder', z.tuple([id, folderName, id.nullable()]), ([id, name, parentId]) =>
+    store.updateFolder(id, name, parentId)
+  )
+  handle('delete-folder', z.tuple([id]), ([id]) => store.deleteFolder(id))
+  handle('move-problem', z.tuple([id, id.nullable()]), ([id, folderId]) => {
+    idle()
+    store.moveProblem(id, folderId)
+  })
   handle('problem', z.tuple([id]), ([id]) => store.problem(id, true))
   handle('delete-problem', z.tuple([id]), ([id]) => {
     idle()
@@ -107,7 +131,9 @@ export function registerIpc(
       importing = false
     }
   })
-  handle('confirm-import', z.tuple([id]), ([token]) => importer.commit(token))
+  handle('confirm-import', z.tuple([id, id.nullable()]), ([token, folderId]) =>
+    importer.commit(token, folderId)
+  )
   handle('discard-import', z.tuple([id]), ([token]) => importer.discard(token))
   handle('create-approach', z.tuple([id, name]), ([id, name]) => store.createApproach(id, name))
   handle('rename-approach', z.tuple([id, name]), ([id, name]) => {

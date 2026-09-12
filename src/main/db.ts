@@ -11,7 +11,8 @@ import type {
   TestCase,
   TestGroup,
   Language,
-  RunState
+  RunState,
+  LibraryFolder
 } from '../shared/types'
 import { log } from './log'
 
@@ -22,7 +23,10 @@ export const defaultSettings: Settings = {
   approachId: null,
   language: 'cpp',
   statementWidth: 36,
-  editorHeight: 57
+  editorHeight: 57,
+  sidebarCollapsed: false,
+  selectedFolderId: null,
+  expandedFolderIds: []
 }
 export type StoredTest = TestCase & { inputPath: string; outputPath: string }
 export class Store {
@@ -34,7 +38,7 @@ export class Store {
     this.db.pragma('foreign_keys = ON')
     this.db.pragma('busy_timeout = 5000')
     const version = this.db.pragma('user_version', { simple: true }) as number
-    if (version > 1)
+    if (version > 2)
       throw new Error('This database was created by a newer DSA Lab. Please update the app.')
     if (version === 0)
       this.db.transaction(() => {
@@ -63,6 +67,91 @@ export class Store {
         PRAGMA user_version = 1;
       `)
       })()
+    if (version < 2)
+      this.db.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE folders (id TEXT PRIMARY KEY, parent_id TEXT REFERENCES folders(id) ON DELETE RESTRICT, name TEXT NOT NULL);
+          CREATE INDEX folders_parent ON folders(parent_id);
+          ALTER TABLE problems ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE RESTRICT;
+          CREATE INDEX problems_folder ON problems(folder_id);
+          PRAGMA user_version = 2;
+        `)
+      })()
+  }
+  folders(): LibraryFolder[] {
+    return this.db
+      .prepare('SELECT id,parent_id AS parentId,name FROM folders ORDER BY name COLLATE NOCASE,id')
+      .all() as LibraryFolder[]
+  }
+  requireFolder(id: string | null): void {
+    if (id !== null && !this.db.prepare('SELECT id FROM folders WHERE id=?').get(id))
+      throw new Error('Destination folder no longer exists. Choose another folder.')
+  }
+  private validateFolder(id: string, name: string, parentId: string | null): void {
+    this.requireFolder(parentId)
+    const folders = this.folders()
+    if (
+      folders.some(
+        (f) =>
+          f.id !== id &&
+          f.parentId === parentId &&
+          f.name.normalize('NFC').toLocaleLowerCase() === name.normalize('NFC').toLocaleLowerCase()
+      )
+    )
+      throw new Error('A folder with that name already exists here.')
+    const proposed = [...folders.filter((f) => f.id !== id), { id, name, parentId }]
+    const byId = new Map(proposed.map((f) => [f.id, f]))
+    for (const folder of proposed) {
+      const visited = new Set<string>()
+      let current: LibraryFolder | undefined = folder
+      while (current) {
+        if (visited.has(current.id))
+          throw new Error('A folder cannot be moved inside itself or its subfolders.')
+        visited.add(current.id)
+        if (visited.size > 32) throw new Error('Folders can be nested up to 32 levels.')
+        current = current.parentId ? byId.get(current.parentId) : undefined
+      }
+    }
+  }
+  createFolder(name: string, parentId: string | null): LibraryFolder {
+    const id = randomUUID()
+    this.validateFolder(id, name, parentId)
+    this.db
+      .prepare('INSERT INTO folders (id,parent_id,name) VALUES (?,?,?)')
+      .run(id, parentId, name)
+    return { id, name, parentId }
+  }
+  updateFolder(id: string, name: string, parentId: string | null): void {
+    this.requireFolder(id)
+    this.validateFolder(id, name, parentId)
+    this.db.prepare('UPDATE folders SET name=?,parent_id=? WHERE id=?').run(name, parentId, id)
+  }
+  deleteFolder(id: string): void {
+    this.requireFolder(id)
+    if (
+      this.db.prepare('SELECT id FROM folders WHERE parent_id=?').get(id) ||
+      this.db.prepare('SELECT id FROM problems WHERE folder_id=?').get(id)
+    )
+      throw new Error(
+        'This folder is not empty. Move its problems and subfolders before deleting it.'
+      )
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM folders WHERE id=?').run(id)
+      const settings = this.settings()
+      this.updateSettings({
+        selectedFolderId: settings.selectedFolderId === id ? null : settings.selectedFolderId,
+        expandedFolderIds: settings.expandedFolderIds.filter((f) => f !== id)
+      })
+    })()
+  }
+  moveProblem(id: string, folderId: string | null): void {
+    this.requireFolder(folderId)
+    if (
+      !this.db
+        .prepare('UPDATE problems SET folder_id=?,updated_at=? WHERE id=?')
+        .run(folderId, new Date().toISOString(), id).changes
+    )
+      throw new Error('Problem no longer exists.')
   }
   path(relative: string): string {
     const target = resolve(this.root, relative)
@@ -87,7 +176,7 @@ export class Store {
   list(): ProblemSummary[] {
     return this.db
       .prepare(
-        `SELECT p.id,p.title,p.topic,p.last_opened_at AS lastOpenedAt,
+        `SELECT p.id,p.folder_id AS folderId,p.title,p.topic,p.last_opened_at AS lastOpenedAt,
       (SELECT COUNT(*) FROM test_cases t JOIN test_groups g ON t.group_id=g.id WHERE g.problem_id=p.id) AS testCount
       FROM problems p ORDER BY COALESCE(p.last_opened_at,p.created_at) DESC, p.title`
       )
@@ -104,7 +193,7 @@ export class Store {
   problem(id: string, markOpened = false): Problem {
     const row = this.db
       .prepare(
-        `SELECT id,title,topic,last_opened_at AS lastOpenedAt,statement_path AS statementPath,
+        `SELECT id,folder_id AS folderId,title,topic,last_opened_at AS lastOpenedAt,statement_path AS statementPath,
       cpp_time_limit_ms AS cppTimeLimitMs,python_time_limit_ms AS pythonTimeLimitMs,output_comparison AS outputComparison FROM problems WHERE id=?`
       )
       .get(id) as

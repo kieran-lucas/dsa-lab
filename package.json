@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "node scripts/qa.mjs",
+    "test:migration": "node scripts/migration-qa.mjs",
     "build": "npm run typecheck && electron-vite build",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",

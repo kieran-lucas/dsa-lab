@@ -60,7 +60,9 @@ export function Environment({
   }
   return (
     <Modal title="Environment" onClose={onClose} wide>
-      <p className="modal-intro">Your tools. Your machine. Everything runs locally.</p>
+      <p className="modal-intro">
+        Configure the local tools used to compile and run your solutions.
+      </p>
       {(['cpp', 'python'] as const).map((language) => (
         <section className="tool-section" key={language}>
           <div className="tool-heading">
@@ -130,7 +132,7 @@ export function Environment({
       <section className="data-section">
         <h3>Local data</h3>
         <code>{environment?.dataDirectory ?? 'Loading…'}</code>
-        <div className="folder-actions">
+        <div className="data-actions">
           <button
             className="text-button"
             onClick={() => void window.dsa.openFolder('data').catch((e) => setError(String(e)))}
