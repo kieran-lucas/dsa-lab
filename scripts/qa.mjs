@@ -222,24 +222,104 @@ try {
   await record('collapsible library expands the editor and Ctrl+K restores search', async () => {
     await setCode('// sidebar resize preserves unsaved code\nint main(){}')
     const before = await page.locator('.monaco-editor').boundingBox()
-    await page.getByRole('button', { name: 'Hide library', exact: true }).click()
+    const headerBefore = await page.evaluate(() => ({
+      toggle: document.querySelector('.sidebar-toggle').getBoundingClientRect().left,
+      breadcrumb: document.querySelector('.breadcrumb').getBoundingClientRect().left
+    }))
+    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
     await expect(page.locator('#library-panel')).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Show library' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
       'aria-expanded',
       'false'
     )
     await expect
       .poll(async () => (await page.locator('.monaco-editor').boundingBox()).width)
       .toBeGreaterThan(before.width + 80)
+    const headerAfter = await page.evaluate(() => ({
+      toggle: document.querySelector('.sidebar-toggle').getBoundingClientRect().left,
+      breadcrumb: document.querySelector('.breadcrumb').getBoundingClientRect().left
+    }))
+    assert.deepEqual(headerAfter, headerBefore)
     await expect(page.locator('.view-lines')).toContainText('sidebar resize preserves unsaved code')
     await page.screenshot({ path: join(qaRoot, '06-collapsed-library.png') })
     await page.keyboard.press('Control+k')
     await expect(page.locator('#library-panel')).toBeVisible()
     await expect(page.locator('#library-panel input')).toBeFocused()
-    await expect(page.getByRole('button', { name: 'Hide library' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toHaveAttribute(
       'aria-expanded',
       'true'
     )
+  })
+  await record('sidebar keyboard toggle, focus, and hidden tab order', async () => {
+    const toggle = page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+    await toggle.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', { name: 'Expand sidebar', exact: true })).toBeFocused()
+    assert.equal(await page.locator('#library-panel').evaluate((element) => element.inert), true)
+    await page.keyboard.press('Tab')
+    assert.equal(
+      await page.evaluate(() => !!document.activeElement?.closest('#library-panel')),
+      false
+    )
+    await page.getByRole('button', { name: 'Expand sidebar', exact: true }).focus()
+    await page.keyboard.press('Control+b')
+    await expect(page.locator('#library-panel')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Collapse sidebar', exact: true })).toBeFocused()
+  })
+  await record('settings sheet controls and persists code font size', async () => {
+    const assertCodeSize = async (expected) => {
+      const sizes = await page.evaluate(() => ({
+        root: getComputedStyle(document.documentElement).getPropertyValue('--code-font-size').trim(),
+        preview: getComputedStyle(document.querySelector('.settings-preview pre')).fontSize,
+        editor: getComputedStyle(document.querySelector('.view-line')).fontSize,
+        markdownCode: getComputedStyle(document.querySelector('.markdown code')).fontSize,
+        settingsLabel: getComputedStyle(document.querySelector('.settings-row label')).fontSize
+      }))
+      assert.deepEqual(sizes, {
+        root: `${expected}px`,
+        preview: `${expected}px`,
+        editor: `${expected}px`,
+        markdownCode: `${expected}px`,
+        settingsLabel: '12px'
+      })
+    }
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await expect(page.locator('.settings-sheet')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Close settings' })).toBeFocused()
+    const decrease = page.getByRole('button', { name: 'Decrease code font size' })
+    const increase = page.getByRole('button', { name: 'Increase code font size' })
+    for (let index = 0; index < 4; index += 1) await decrease.click()
+    await assertCodeSize(10)
+    await page.getByRole('button', { name: 'Reset to default' }).click()
+    await assertCodeSize(14)
+    for (let index = 0; index < 4; index += 1) await increase.click()
+    await assertCodeSize(18)
+    for (let index = 0; index < 10; index += 1) await increase.click()
+    await assertCodeSize(28)
+    await page.getByRole('button', { name: 'Reset to default' }).click()
+    for (let index = 0; index < 4; index += 1) await increase.click()
+    await assertCodeSize(18)
+    await page.screenshot({ path: join(qaRoot, '10-settings.png') })
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.settings-sheet')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeFocused()
+    await page.reload()
+    await page.waitForFunction(() => !!window.dsa)
+    await page.evaluate(() => {
+      window.__qaEvents = []
+      window.dsa.onRunProgress((event) => window.__qaEvents.push(event))
+    })
+    assert.equal(
+      await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--code-font-size').trim()
+      ),
+      '18px'
+    )
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await expect(page.locator('.font-size-stepper output')).toHaveText('18 px')
+    await page.getByRole('button', { name: 'Reset to default' }).click()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.settings-sheet')).toHaveCount(0)
   })
   await record('GCC and Python detection', async () => {
     const env = await page.evaluate(() => window.dsa.detectToolchains())
@@ -411,7 +491,7 @@ try {
     await expect(page.locator('.view-lines')).toContainText('brute force cpp')
     await page.getByRole('tab', { name: 'Python', exact: true }).click()
     await expect(page.locator('.view-lines')).toContainText('brute force python')
-    await page.getByRole('button', { name: 'Hide library', exact: true }).click()
+    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
     await expect(page.locator('#library-panel')).toBeHidden()
     await setCode('# persisted on immediate close\nprint(456)')
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
@@ -429,7 +509,7 @@ try {
       await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()),
       true
     )
-    await page.getByRole('button', { name: 'Show library', exact: true }).click()
+    await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
     await expect(page.locator('#library-panel')).toBeVisible()
     await expect(page.getByLabel('Approach', { exact: true })).toContainText('Two Pointers')
     const data = await page.evaluate(async () => {

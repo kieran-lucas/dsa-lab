@@ -58,8 +58,17 @@ type Props = {
   onChange: (value: string) => void
   diagnostics: string
   jump: { line: number; nonce: number } | null
+  fontSize: number
 }
-export function CodeEditor({ value, language, modelId, onChange, diagnostics, jump }: Props) {
+export function CodeEditor({
+  value,
+  language,
+  modelId,
+  onChange,
+  diagnostics,
+  jump,
+  fontSize
+}: Props) {
   const host = useRef<HTMLDivElement>(null)
   const editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const callback = useRef(onChange)
@@ -78,8 +87,8 @@ export function CodeEditor({ value, language, modelId, onChange, diagnostics, ju
       theme: 'dsa-light',
       fontFamily: '"JetBrains Mono Variable", monospace',
       fontWeight: '570',
-      fontSize: 13,
-      lineHeight: 22,
+      fontSize,
+      lineHeight: Math.round(fontSize * 1.6),
       fontLigatures: false,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -114,6 +123,9 @@ export function CodeEditor({ value, language, modelId, onChange, diagnostics, ju
   useEffect(() => {
     if (editor.current && editor.current.getValue() !== value) editor.current.setValue(value)
   }, [value])
+  useEffect(() => {
+    editor.current?.updateOptions({ fontSize, lineHeight: Math.round(fontSize * 1.6) })
+  }, [fontSize])
   useEffect(() => {
     const model = editor.current?.getModel()
     if (!model) return

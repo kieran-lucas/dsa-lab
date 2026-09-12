@@ -20,6 +20,7 @@ import {
   Play,
   Plus,
   Search,
+  Settings as SettingsIcon,
   Settings2,
   Square,
   Trash2,
@@ -39,10 +40,18 @@ import { Modal, ZipHelp } from './components/Modal'
 import { Environment } from './components/Environment'
 import { Results } from './components/Results'
 import { Library, FolderSelect, folderPath } from './components/Library'
+import {
+  CODE_FONT_SIZE_KEY,
+  MAX_CODE_FONT_SIZE,
+  MIN_CODE_FONT_SIZE,
+  readCodeFontSize,
+  SettingsPanel
+} from './components/SettingsPanel'
 
 type Dialog =
   | 'import'
   | 'help'
+  | 'settings'
   | 'environment'
   | 'create'
   | 'rename'
@@ -97,6 +106,7 @@ const Statement = memo(function Statement({ problem }: { problem: Problem }) {
   )
 })
 export function App() {
+  const [codeFontSize, setCodeFontSize] = useState(readCodeFontSize)
   const [settings, setSettings] = useState<Settings | null>(null)
   const [problems, setProblems] = useState<ProblemSummary[]>([])
   const [folders, setFolders] = useState<LibraryFolder[]>([])
@@ -130,6 +140,10 @@ export function App() {
   const active = !!run && run.phase !== 'complete'
   const approach = problem?.approaches.find((a) => a.id === approachId)
   const sidebarCollapsed = settings?.sidebarCollapsed ?? false
+  useEffect(() => {
+    document.documentElement.style.setProperty('--code-font-size', `${codeFontSize}px`)
+    localStorage.setItem(CODE_FONT_SIZE_KEY, String(codeFontSize))
+  }, [codeFontSize])
   useEffect(() => {
     if (!sidebarCollapsed && searchRequested.current) {
       searchRequested.current = false
@@ -182,6 +196,12 @@ export function App() {
       report(error)
     })
   }
+  const toggleSidebar = useCallback(() => {
+    if (!settings) return
+    void updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed }).catch(report)
+  }, [settings, updateSettings])
+  const changeCodeFontSize = (size: number) =>
+    setCodeFontSize(Math.max(MIN_CODE_FONT_SIZE, Math.min(MAX_CODE_FONT_SIZE, Math.round(size))))
   const loadProblem = useCallback(
     async (id: string, preferred?: string, lang?: Language) => {
       const item = await window.dsa.getProblem(id)
@@ -334,11 +354,11 @@ export function App() {
       setBusy(false)
     }
   }
-  const keyboard = useRef({ runAll, flush, focusSearch })
-  keyboard.current = { runAll, flush, focusSearch }
+  const keyboard = useRef({ runAll, flush, focusSearch, toggleSidebar })
+  keyboard.current = { runAll, flush, focusSearch, toggleSidebar }
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (!event.ctrlKey) return
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.defaultPrevented) return
       if (event.key === 'Enter') {
         event.preventDefault()
         void keyboard.current.runAll()
@@ -348,6 +368,9 @@ export function App() {
       } else if (event.key.toLowerCase() === 'k') {
         event.preventDefault()
         keyboard.current.focusSearch()
+      } else if (event.key.toLowerCase() === 'b') {
+        event.preventDefault()
+        keyboard.current.toggleSidebar()
       }
     }
     window.addEventListener('keydown', listener, true)
@@ -511,7 +534,7 @@ export function App() {
     }
   }
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">
@@ -521,14 +544,13 @@ export function App() {
           <span className="local-label">LOCAL</span>
           <button
             className="icon-button sidebar-toggle"
-            aria-label={sidebarCollapsed ? 'Show library' : 'Hide library'}
-            title={sidebarCollapsed ? 'Show library' : 'Hide library'}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-controls="library-panel"
             aria-expanded={!sidebarCollapsed}
+            aria-keyshortcuts="Control+B"
             disabled={!settings}
-            onClick={() =>
-              void updateSettings({ sidebarCollapsed: !sidebarCollapsed }).catch(report)
-            }
+            onClick={toggleSidebar}
           >
             {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
@@ -553,6 +575,14 @@ export function App() {
             )}
             {saveStatus}
           </span>
+          <button
+            className="icon-button header-settings-button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => openDialog('settings')}
+          >
+            <SettingsIcon size={17} />
+          </button>
           <button onClick={() => openDialog('environment')}>
             <Settings2 size={14} />
             Environment
@@ -571,7 +601,12 @@ export function App() {
         </div>
       )}
       <div className="app-body">
-        <aside id="library-panel" className="library" hidden={sidebarCollapsed}>
+        <aside
+          id="library-panel"
+          className="library"
+          aria-hidden={sidebarCollapsed}
+          inert={sidebarCollapsed}
+        >
           <div className="library-top">
             <span className="eyebrow">LIBRARY</span>
             <span className="count">{problems.length}</span>
@@ -795,6 +830,7 @@ export function App() {
                     onChange={edit}
                     diagnostics={run?.diagnostics ?? ''}
                     jump={jump}
+                    fontSize={codeFontSize}
                   />
                 ) : (
                   <div className="results-empty">
@@ -863,6 +899,13 @@ export function App() {
       )}
       {dialog === 'environment' && settings && (
         <Environment settings={settings} onUpdate={setSettings} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'settings' && (
+        <SettingsPanel
+          codeFontSize={codeFontSize}
+          onCodeFontSizeChange={changeCodeFontSize}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog === 'move-problem' && (
         <Modal
