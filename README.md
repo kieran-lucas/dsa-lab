@@ -55,6 +55,10 @@ Outputs:
 - `release/win-unpacked/DSA Lab.exe`
 - `release/DSA-Lab-1.0.0-x64-Setup.exe`
 
+For fast daily launch without an installer, copy the entire `release/win-unpacked` directory to a permanent local directory and create a Desktop shortcut to its `DSA Lab.exe`. Keep the executable together with its resources. The single-file NSIS portable target extracts the application on every launch and removes it on exit, so repeated launches still pay the extraction cost.
+
+The library loads independently of Monaco; the editor starts loading alongside problem restoration. To measure native window startup with an isolated profile, run `scripts/startup-benchmark.ps1 -Executable 'release/win-unpacked/DSA Lab.exe'`. Run `node scripts/startup-qa.mjs` to check deferred editor loading and measure saved-code restoration across three restarts. Set `DSA_QA_EXECUTABLE` to test another unpacked copy. These measurements use test data under `.qa/` and do not change the personal library.
+
 The installer does not require administrator permissions and preserves user data during uninstall. The development build is unsigned; distributing a signed installer requires your own Windows code-signing certificate. Native `.node` binaries are unpacked from ASAR.
 
 To exercise the packaged application:

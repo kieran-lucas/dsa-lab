@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -35,7 +35,6 @@ import type {
   RunState,
   Settings
 } from '../shared/types'
-import { CodeEditor } from './components/CodeEditor'
 import { Modal, ZipHelp } from './components/Modal'
 import { Environment } from './components/Environment'
 import { Results } from './components/Results'
@@ -47,6 +46,10 @@ import {
   readCodeFontSize,
   SettingsPanel
 } from './components/SettingsPanel'
+
+// Load the editor alongside problem restoration, without blocking the library's first paint.
+const loadEditor = () => import('./components/CodeEditor')
+const CodeEditor = lazy(() => loadEditor().then((module) => ({ default: module.CodeEditor })))
 
 type Dialog =
   | 'import'
@@ -208,6 +211,7 @@ export function App() {
     setCodeFontSize(Math.max(MIN_CODE_FONT_SIZE, Math.min(MAX_CODE_FONT_SIZE, Math.round(size))))
   const loadProblem = useCallback(
     async (id: string, preferred?: string, lang?: Language) => {
+      void loadEditor().catch(report)
       const item = await window.dsa.getProblem(id)
       const next = item.approaches.find((a) => a.id === preferred) ?? item.approaches[0]
       const chosenLanguage = lang ?? language
@@ -832,16 +836,18 @@ export function App() {
                   <span className="language-version">{languageVersion(language)}</span>
                 </div>
                 {approach ? (
-                  <CodeEditor
-                    key={`${approachId}-${language}`}
-                    modelId={approachId}
-                    value={source}
-                    language={language}
-                    onChange={edit}
-                    diagnostics={run?.diagnostics ?? ''}
-                    jump={jump}
-                    fontSize={codeFontSize}
-                  />
+                  <Suspense fallback={<div className="code-editor" aria-label="Loading editor" />}>
+                    <CodeEditor
+                      key={`${approachId}-${language}`}
+                      modelId={approachId}
+                      value={source}
+                      language={language}
+                      onChange={edit}
+                      diagnostics={run?.diagnostics ?? ''}
+                      jump={jump}
+                      fontSize={codeFontSize}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="results-empty">
                     <p>No approach selected</p>
