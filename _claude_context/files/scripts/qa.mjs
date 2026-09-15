@@ -13,7 +13,7 @@ await makeZip(
   fixture,
   entries.map(([name, data]) => [
     name,
-    name === '001/meta.json'
+    name === 'meta.json'
       ? JSON.stringify({
           title: 'Sum of Two Numbers',
           topic: 'Foundations',
@@ -131,18 +131,12 @@ try {
     async () => {
       await pick(fixture)
       await page.getByRole('button', { name: 'Import ZIP', exact: true }).click()
-      await expect(page.locator('.import-row')).toHaveCount(1)
-      await expect(page.locator('.import-row')).toContainText('3 groups')
-      await expect(page.locator('.import-row')).toContainText('6 tests')
-      await expect(page.getByRole('button', { name: /^Import \d+ valid/ })).toBeDisabled()
+      await expect(page.locator('.preview-stats')).toContainText('3 test groups')
+      await expect(page.locator('.preview-stats')).toContainText('6 test cases')
+      await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
       await page.getByLabel('Import into', { exact: true }).selectOption(weekId)
       await page.screenshot({ path: join(qaRoot, '08-import-preview.png') })
-      await page.getByRole('button', { name: 'Import 1 valid problem', exact: true }).click()
-      await expect(page.locator('.import-row')).toContainText('Sum of Two Numbers')
-      await page.getByRole('button', { name: 'Done', exact: true }).click()
-      await expect(page.getByRole('dialog')).toHaveCount(0)
-      assert.equal((await page.evaluate(() => window.dsa.listProblems()))[0].folderId, weekId)
-      await page.getByRole('button', { name: /Sum of Two Numbers/ }).click()
+      await page.getByRole('button', { name: 'Import', exact: true }).click()
       await expect(page.locator('.statement-body h1')).toHaveText('Sum of Two Numbers')
       await expect(page.locator('.monaco-editor')).toBeVisible()
       await expect(page.locator('.markdown h2').first()).toHaveText('Input')
@@ -155,6 +149,7 @@ try {
       }))
       assert.ok(Math.abs(alignment.statement - alignment.editor) < 2, JSON.stringify(alignment))
       assert.ok(alignment.search <= 36 && alignment.row <= 52, JSON.stringify(alignment))
+      assert.equal((await page.evaluate(() => window.dsa.listProblems()))[0].folderId, weekId)
       await expect(page.locator('.breadcrumb')).toContainText('DSA UET / Bài tập về nhà / Tuần 1')
       await page.screenshot({ path: join(qaRoot, '07-nested-library.png') })
     }
@@ -528,25 +523,23 @@ try {
       python
     )
   })
-  await record('malformed problems fail per-item without failing the whole archive', async () => {
+  await record('malformed packages fail without partial imports', async () => {
     const cases = [
-      ['missing-statement.zip', entries.filter(([n]) => n !== '001/problem.md')],
-      ['missing-output.zip', entries.filter(([n]) => n !== '001/tests/sample/001.out')],
-      ['missing-input.zip', entries.filter(([n]) => n !== '001/tests/sample/001.in')],
-      ['empty-tests.zip', entries.filter(([n]) => !n.startsWith('001/tests/'))]
+      ['missing-statement.zip', entries.filter(([n]) => n !== 'problem.md')],
+      ['missing-output.zip', entries.filter(([n]) => n !== 'tests/sample/001.out')],
+      ['missing-input.zip', entries.filter(([n]) => n !== 'tests/sample/001.in')],
+      ['empty-tests.zip', entries.filter(([n]) => !n.startsWith('tests/'))]
     ]
     for (const [name, content] of cases) {
       const file = join(qaRoot, name)
       await makeZip(file, content)
       await pick(file)
       const result = await page.evaluate(() => window.dsa.importProblemZip())
-      assert.equal(result.ok, true, name)
-      assert.equal(result.preview.problems[0].valid, false, name)
+      assert.equal(result.ok, false, name)
     }
     const unsafe = join(qaRoot, 'unsafe.zip')
     await makeZip(unsafe, [
-      ['001/problem.md', '# Unsafe'],
-      ['001/meta.json', JSON.stringify({ title: 'Unsafe' })],
+      ['problem.md', '# Unsafe'],
       ['xx/bad.in', '1'],
       ['xx/bad.out', '1']
     ])

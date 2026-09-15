@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import { basename } from 'node:path'
 export const LIMITS = {
-  zip: 512 * 1024 * 1024,
-  entries: 50000,
-  total: 2 * 1024 * 1024 * 1024,
+  zip: 128 * 1024 * 1024,
+  entries: 5000,
+  total: 512 * 1024 * 1024,
   test: 16 * 1024 * 1024,
   statement: 4 * 1024 * 1024,
   meta: 64 * 1024
@@ -33,11 +34,6 @@ export function validatePath(name: string): void {
       )
   )
     throw new PackageError([`Unsafe archive path: ${name.slice(0, 200)}`])
-}
-export function isJunkPath(name: string): boolean {
-  if (name.startsWith('__MACOSX/')) return true
-  const base = name.endsWith('/') ? name.slice(0, -1).split('/').pop() : name.split('/').pop()
-  return base === '.DS_Store' || base === 'Thumbs.db'
 }
 export type Pair = { name: string; group: string; input: string; output: string }
 export function pairTests(names: string[]): Pair[] {
@@ -82,18 +78,8 @@ export function pairTests(names: string[]): Pair[] {
   if (issues.length) throw new PackageError(issues.slice(0, 30))
   return [...logical.values()] as Pair[]
 }
-export function sortPairs(pairs: Pair[]): Pair[] {
-  return [...pairs].sort((a, b) => {
-    const priority = (g: string) => (g.toLowerCase() === 'sample' ? 0 : g === 'General' ? 1 : 2)
-    return (
-      priority(a.group) - priority(b.group) ||
-      a.group.localeCompare(b.group, undefined, { numeric: true }) ||
-      a.name.localeCompare(b.name, undefined, { numeric: true })
-    )
-  })
-}
 const metadataSchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(200).optional(),
   topic: z.string().trim().max(100).optional(),
   timeLimitMs: z
     .object({
@@ -104,29 +90,22 @@ const metadataSchema = z.object({
     .optional(),
   outputComparison: z.enum(['tokens', 'exact']).optional()
 })
-export type Meta = {
-  title: string
-  topic: string | null
-  cppTimeLimitMs: number
-  pythonTimeLimitMs: number
-  javaTimeLimitMs: number
-  outputComparison: 'tokens' | 'exact'
-}
-export function parseMeta(raw: string): Meta {
+export function metadata(raw: string | undefined, statement: string, zipName: string) {
   let parsed: unknown
   try {
-    parsed = JSON.parse(raw)
+    parsed = raw ? JSON.parse(raw) : {}
   } catch {
     throw new PackageError(['meta.json is not valid JSON.'])
   }
   const result = metadataSchema.safeParse(parsed)
   if (!result.success)
     throw new PackageError(
-      result.error.issues.map((i) => `meta.json ${i.path.join('.') || 'title'}: ${i.message}`)
+      result.error.issues.map((i) => `meta.json ${i.path.join('.')}: ${i.message}`)
     )
   const meta = result.data
+  const h1 = /^#\s+(.+?)\s*#*\s*$/m.exec(statement)?.[1]
   return {
-    title: meta.title,
+    title: meta.title ?? h1?.slice(0, 200) ?? basename(zipName, '.zip'),
     topic: meta.topic || null,
     cppTimeLimitMs: meta.timeLimitMs?.cpp ?? 2000,
     pythonTimeLimitMs: meta.timeLimitMs?.python ?? 5000,

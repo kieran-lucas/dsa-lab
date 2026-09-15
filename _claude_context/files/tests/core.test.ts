@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { compareOutput, aggregate } from '../src/main/runner/comparator'
-import { pairTests, parseMeta, validatePath } from '../src/main/import/validation'
-import { naturalCompare, normalizeTitle } from '../src/shared/types'
+import { metadata, pairTests, validatePath } from '../src/main/import/validation'
+import { naturalCompare } from '../src/shared/types'
 import { javaRuntime } from '../src/main/runner/toolchains'
 describe('library ordering', () => {
   it('sorts numeric names naturally, then alphabetically', () => {
@@ -82,31 +82,26 @@ describe('test pairing and archive paths', () => {
     'tests/a\0.in'
   ])('rejects unsafe path %s', (name) => expect(() => validatePath(name)).toThrow())
 })
-describe('meta.json', () => {
-  it('uses the required title and default limits', () =>
-    expect(parseMeta('{"title":"Explicit"}')).toEqual({
-      title: 'Explicit',
+describe('metadata', () => {
+  it('uses metadata title', () =>
+    expect(metadata('{"title":"Explicit"}', '# Heading', 'archive.zip').title).toBe('Explicit'))
+  it('falls back to first H1', () =>
+    expect(metadata(undefined, 'Introduction\n# Heading\nText', 'archive.zip').title).toBe(
+      'Heading'
+    ))
+  it('falls back to archive name and defaults', () =>
+    expect(metadata(undefined, 'No heading', 'archive.zip')).toEqual({
+      title: 'archive',
       topic: null,
       cppTimeLimitMs: 2000,
       pythonTimeLimitMs: 5000,
       javaTimeLimitMs: 3000,
       outputComparison: 'tokens'
     }))
-  it('rejects a missing title', () => expect(() => parseMeta('{}')).toThrow())
-  it('rejects a blank title', () => expect(() => parseMeta('{"title":"   "}')).toThrow())
   it('rejects bad JSON and invalid limits', () => {
-    expect(() => parseMeta('{')).toThrow()
-    expect(() => parseMeta('{"title":"x","timeLimitMs":{"cpp":-1}}')).toThrow()
+    expect(() => metadata('{', 'x', 'x.zip')).toThrow()
+    expect(() => metadata('{"timeLimitMs":{"cpp":-1}}', 'x', 'x.zip')).toThrow()
   })
-})
-describe('title normalization', () => {
-  it('is case-insensitive', () => expect(normalizeTitle('Two Sum')).toBe(normalizeTitle('two sum')))
-  it('treats NFC/NFD-equivalent unicode as identical', () => {
-    const composed = 'Đường đi'
-    expect(normalizeTitle(composed)).toBe(normalizeTitle(composed.normalize('NFD')))
-  })
-  it('trims surrounding whitespace only', () =>
-    expect(normalizeTitle('  Two Sum  ')).toBe(normalizeTitle('Two Sum')))
 })
 describe('Java toolchain', () => {
   it('uses java on PATH for javac on PATH', () => expect(javaRuntime('javac')).toBe('java'))

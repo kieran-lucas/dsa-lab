@@ -46,9 +46,7 @@ for (let run = 0; run < 4; run++) {
       await page.evaluate(async () => {
         const imported = await window.dsa.importProblemZip()
         if (!imported.ok) throw new Error('Fixture import failed')
-        const result = await window.dsa.confirmImport(imported.preview.token, null)
-        const problemId = result.results[0]?.problemId
-        if (!problemId) throw new Error('Fixture import did not succeed')
+        const problemId = await window.dsa.confirmImport(imported.preview.token, null)
         const problem = await window.dsa.getProblem(problemId)
         const approachId = problem.approaches[0].id
         await window.dsa.saveCode(approachId, 'python', 'print("startup-preserved")\n')

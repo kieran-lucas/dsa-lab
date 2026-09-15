@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -27,8 +27,7 @@ import {
   X
 } from 'lucide-react'
 import type {
-  ImportBatchCommitResult,
-  ImportBatchPreview,
+  ImportPreview,
   LibraryFolder,
   Language,
   Problem,
@@ -36,7 +35,6 @@ import type {
   RunState,
   Settings
 } from '../shared/types'
-import { normalizeTitle } from '../shared/types'
 import { Modal, ZipHelp } from './components/Modal'
 import { Environment } from './components/Environment'
 import { Results } from './components/Results'
@@ -126,9 +124,7 @@ export function App() {
   const [source, setSource] = useState('')
   const [search, setSearch] = useState('')
   const [dialog, setDialog] = useState<Dialog>(null)
-  const [preview, setPreview] = useState<ImportBatchPreview | null>(null)
-  const [importResult, setImportResult] = useState<ImportBatchCommitResult | null>(null)
-  const [importFilter, setImportFilter] = useState<'all' | 'ready' | 'errors'>('all')
+  const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [importIssues, setImportIssues] = useState<string[]>([])
   const [importBusy, setImportBusy] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -399,8 +395,6 @@ export function App() {
     setDialog('import')
     setImportBusy(true)
     setImportIssues([])
-    setImportFilter('all')
-    setImportResult(null)
     setPreview(null)
     try {
       const result = await window.dsa.importProblemZip()
@@ -417,22 +411,8 @@ export function App() {
     if (importBusy) return
     if (preview) void window.dsa.discardImport(preview.token).catch(report)
     setPreview(null)
-    setImportResult(null)
     setDialog(null)
   }
-  const destinationConflicts = useMemo(() => {
-    const conflicts = new Set<string>()
-    if (!preview || !destination) return conflicts
-    const folderId = destination === 'root' ? null : destination
-    const existing = new Set(
-      problems.filter((p) => p.folderId === folderId).map((p) => normalizeTitle(p.title))
-    )
-    for (const p of preview.problems)
-      if (p.valid && p.title && existing.has(normalizeTitle(p.title))) conflicts.add(p.slot)
-    return conflicts
-  }, [preview, destination, problems])
-  const readyCount =
-    preview?.problems.filter((p) => p.valid && !destinationConflicts.has(p.slot)).length ?? 0
   const confirmImport = async () => {
     if (!preview) return
     setImportBusy(true)
@@ -440,11 +420,11 @@ export function App() {
       await flush()
       if (!destination) throw new Error('Choose an import destination.')
       const folderId = destination === 'root' ? null : destination
-      const result = await window.dsa.confirmImport(preview.token, folderId)
+      const id = await window.dsa.confirmImport(preview.token, folderId)
       await revealFolder(folderId)
-      await refreshLibrary()
-      setImportResult(result)
+      await loadProblem(id)
       setPreview(null)
+      setDialog(null)
     } catch (e) {
       setImportIssues([String(e)])
       setPreview(null)
@@ -985,48 +965,31 @@ export function App() {
         </Modal>
       )}
       {dialog === 'import' && (
-        <Modal title="Import problems" onClose={closeImport} wide>
+        <Modal title="Import problem" onClose={closeImport}>
           {importBusy ? (
             <div className="import-loading">
               <LoaderCircle className="spin" size={24} />
-              <h3>{preview ? 'Importing problems…' : 'Validating package…'}</h3>
-              <p>Checking statements, test pairs, and archive safety.</p>
-            </div>
-          ) : importResult ? (
-            <div className="import-batch">
-              <p className="modal-intro">
-                <strong>{importResult.successCount}</strong>{' '}
-                {importResult.successCount === 1 ? 'problem' : 'problems'} imported
-                {importResult.failureCount > 0 && (
-                  <>
-                    {' · '}
-                    <strong>{importResult.failureCount}</strong> failed
-                  </>
-                )}
-              </p>
-              <div className="import-row-list">
-                {importResult.results.map((r) => (
-                  <div key={r.slot} className={`import-row ${r.ok ? 'ok' : 'error'}`}>
-                    {r.ok ? <Check size={14} /> : <X size={14} />}
-                    <span className="import-row-title">{r.title || r.slot}</span>
-                    {!r.ok && <span className="import-row-issue">{r.issues[0]}</span>}
-                  </div>
-                ))}
-              </div>
+              <h3>{preview ? 'Importing problem…' : 'Validating package…'}</h3>
+              <p>Checking the statement, test pairs, and archive safety.</p>
             </div>
           ) : preview ? (
-            <div className="import-batch">
+            <div className="import-preview">
               <div className="import-identity">
                 <div className="preview-icon">
                   <FileArchive size={22} />
                 </div>
                 <div>
-                  <h3>{preview.sourceName}</h3>
-                  <span className="subtle-tag">
-                    {preview.totalCount} {preview.totalCount === 1 ? 'problem' : 'problems'}{' '}
-                    detected
-                  </span>
+                  <h3>{preview.title}</h3>
+                  {preview.topic && <span className="subtle-tag">{preview.topic}</span>}
                 </div>
+              </div>
+              <div className="preview-stats">
+                <span>
+                  <b>{preview.groupCount}</b> test groups
+                </span>
+                <span>
+                  <b>{preview.testCount}</b> test cases
+                </span>
               </div>
               <FolderSelect
                 folders={folders}
@@ -1035,56 +998,23 @@ export function App() {
                 label="Import into"
                 required
               />
-              <div className="import-filter-tabs" role="group" aria-label="Filter detected problems">
-                <button aria-pressed={importFilter === 'all'} onClick={() => setImportFilter('all')}>
-                  All <span>{preview.totalCount}</span>
-                </button>
-                <button
-                  aria-pressed={importFilter === 'ready'}
-                  onClick={() => setImportFilter('ready')}
-                >
-                  Ready <span>{readyCount}</span>
-                </button>
-                <button
-                  aria-pressed={importFilter === 'errors'}
-                  onClick={() => setImportFilter('errors')}
-                >
-                  Errors <span>{preview.totalCount - readyCount}</span>
-                </button>
+              <div className="preview-groups">
+                {preview.groups.map((g) => (
+                  <div key={g.name}>
+                    <span>{g.name}</span>
+                    <span>{g.count} tests</span>
+                  </div>
+                ))}
               </div>
-              <div className="import-row-list">
-                {preview.problems
-                  .filter((p) => {
-                    const ready = p.valid && !destinationConflicts.has(p.slot)
-                    return importFilter === 'ready'
-                      ? ready
-                      : importFilter === 'errors'
-                        ? !ready
-                        : true
-                  })
-                  .map((p) => {
-                    const conflict = destinationConflicts.has(p.slot)
-                    const ready = p.valid && !conflict
-                    const issue = conflict ? 'Already exists in this destination' : p.issues[0]
-                    return (
-                      <div key={p.slot} className={`import-row ${ready ? 'ok' : 'error'}`}>
-                        {ready ? <Check size={14} /> : <X size={14} />}
-                        <span className="import-row-slot">{p.slot}</span>
-                        <span className="import-row-title">{p.title || '(untitled)'}</span>
-                        {ready ? (
-                          <span className="import-row-meta">
-                            {p.testCount} tests · {p.groupCount} groups
-                          </span>
-                        ) : (
-                          <span className="import-row-issue">{issue}</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                {!preview.problems.length && (
-                  <p className="library-message">No problems detected in this archive.</p>
-                )}
-              </div>
+              <p className="preview-limits">
+                C++ <span className="mono">{preview.cppTimeLimitMs} ms</span> · Python{' '}
+                <span className="mono">{preview.pythonTimeLimitMs} ms</span> · Java{' '}
+                <span className="mono">{preview.javaTimeLimitMs} ms</span>
+                <br />
+                {preview.outputComparison === 'tokens'
+                  ? 'Whitespace-insensitive token comparison'
+                  : 'Exact output comparison'}
+              </p>
             </div>
           ) : (
             <>
@@ -1102,30 +1032,22 @@ export function App() {
             </>
           )}
           <div className="modal-footer">
-            {importResult ? (
-              <button className="primary" onClick={closeImport}>
-                Done
+            <button onClick={closeImport} disabled={importBusy}>
+              Cancel
+            </button>
+            <span className="toolbar-spacer" />
+            <button onClick={() => void chooseZip()} disabled={importBusy}>
+              {preview ? 'Choose another ZIP' : 'Choose ZIP'}
+            </button>
+            {preview && (
+              <button
+                className="primary"
+                onClick={() => void confirmImport()}
+                disabled={importBusy || !destination}
+              >
+                <Plus size={14} />
+                Import
               </button>
-            ) : (
-              <>
-                <button onClick={closeImport} disabled={importBusy}>
-                  Cancel
-                </button>
-                <span className="toolbar-spacer" />
-                <button onClick={() => void chooseZip()} disabled={importBusy}>
-                  {preview ? 'Choose another ZIP' : 'Choose ZIP'}
-                </button>
-                {preview && (
-                  <button
-                    className="primary"
-                    onClick={() => void confirmImport()}
-                    disabled={importBusy || !destination || readyCount === 0}
-                  >
-                    <Plus size={14} />
-                    Import {readyCount} valid {readyCount === 1 ? 'problem' : 'problems'}
-                  </button>
-                )}
-              </>
             )}
           </div>
         </Modal>

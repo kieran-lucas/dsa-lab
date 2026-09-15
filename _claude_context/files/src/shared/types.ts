@@ -2,8 +2,6 @@ export type Language = 'cpp' | 'python' | 'java'
 const naturalCollator = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' })
 export const naturalCompare = (a: string, b: string): number =>
   naturalCollator.compare(a, b) || a.localeCompare(b, 'vi', { sensitivity: 'variant' })
-export const normalizeTitle = (title: string): string =>
-  title.trim().normalize('NFC').toLocaleLowerCase('vi')
 export type TestVerdict = 'AC' | 'WA' | 'TLE' | 'RE' | 'OLE'
 export type RunVerdict = 'PASSED' | 'FAILED' | 'COMPILE_ERROR' | 'CANCELLED'
 export type ToolCommand = { executable: string; argsPrefix: string[] }
@@ -51,45 +49,22 @@ export type Problem = ProblemSummary & {
   groups: TestGroup[]
   approaches: Approach[]
 }
-export type ImportProblemPreview = {
-  slot: string
-  title: string | null
-  topic: string | null
-  valid: boolean
-  issues: string[]
-  testCount: number
-  groupCount: number
-  groups: { name: string; count: number }[]
-  cppTimeLimitMs?: number
-  pythonTimeLimitMs?: number
-  javaTimeLimitMs?: number
-  outputComparison?: 'tokens' | 'exact'
-}
-export type ImportBatchPreview = {
+export type ImportPreview = {
   token: string
-  sourceName: string
-  totalCount: number
-  validCount: number
-  invalidCount: number
-  problems: ImportProblemPreview[]
+  title: string
+  topic: string | null
+  groupCount: number
+  testCount: number
+  cppTimeLimitMs: number
+  pythonTimeLimitMs: number
+  javaTimeLimitMs: number
+  outputComparison: 'tokens' | 'exact'
+  groups: { name: string; count: number }[]
 }
 export type ImportResult =
-  | { ok: true; preview: ImportBatchPreview }
+  | { ok: true; preview: ImportPreview }
   | { ok: false; message: string; issues: string[] }
   | { cancelled: true }
-export type ImportProblemCommitResult = {
-  slot: string
-  title: string | null
-  ok: boolean
-  problemId?: string
-  issues: string[]
-}
-export type ImportBatchCommitResult = {
-  totalCount: number
-  successCount: number
-  failureCount: number
-  results: ImportProblemCommitResult[]
-}
 export type ToolStatus = {
   command: ToolCommand
   available: boolean
@@ -152,7 +127,7 @@ export interface DsaApi {
   getProblem(id: string): Promise<Problem>
   deleteProblem(id: string): Promise<void>
   importProblemZip(): Promise<ImportResult>
-  confirmImport(token: string, folderId: string | null): Promise<ImportBatchCommitResult>
+  confirmImport(token: string, folderId: string | null): Promise<string>
   discardImport(token: string): Promise<void>
   createApproach(problemId: string, name: string): Promise<Approach>
   renameApproach(id: string, name: string): Promise<void>

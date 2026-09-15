@@ -2,13 +2,7 @@ import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
-import {
-  CPP_TEMPLATE,
-  JAVA_TEMPLATE,
-  PYTHON_TEMPLATE,
-  naturalCompare,
-  normalizeTitle
-} from '../shared/types'
+import { CPP_TEMPLATE, JAVA_TEMPLATE, PYTHON_TEMPLATE, naturalCompare } from '../shared/types'
 import type {
   Approach,
   Problem,
@@ -162,29 +156,14 @@ export class Store {
       })
     })()
   }
-  problemTitleExists(title: string, folderId: string | null, excludeProblemId?: string): boolean {
-    const rows = (
-      folderId === null
-        ? this.db.prepare('SELECT id,title FROM problems WHERE folder_id IS NULL').all()
-        : this.db.prepare('SELECT id,title FROM problems WHERE folder_id=?').all(folderId)
-    ) as { id: string; title: string }[]
-    const target = normalizeTitle(title)
-    return rows.some((r) => r.id !== excludeProblemId && normalizeTitle(r.title) === target)
-  }
-  assertProblemTitleAvailable(title: string, folderId: string | null, excludeProblemId?: string): void {
-    if (this.problemTitleExists(title, folderId, excludeProblemId))
-      throw new Error(`"${title}" already exists in this destination.`)
-  }
   moveProblem(id: string, folderId: string | null): void {
     this.requireFolder(folderId)
-    const row = this.db.prepare('SELECT title,folder_id AS folderId FROM problems WHERE id=?').get(id) as
-      | { title: string; folderId: string | null }
-      | undefined
-    if (!row) throw new Error('Problem no longer exists.')
-    if (row.folderId !== folderId) this.assertProblemTitleAvailable(row.title, folderId, id)
-    this.db
-      .prepare('UPDATE problems SET folder_id=?,updated_at=? WHERE id=?')
-      .run(folderId, new Date().toISOString(), id)
+    if (
+      !this.db
+        .prepare('UPDATE problems SET folder_id=?,updated_at=? WHERE id=?')
+        .run(folderId, new Date().toISOString(), id).changes
+    )
+      throw new Error('Problem no longer exists.')
   }
   path(relative: string): string {
     const target = resolve(this.root, relative)
